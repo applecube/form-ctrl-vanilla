@@ -1,0 +1,46 @@
+{
+  "name": "form-ctrl-vanilla",
+  "description": "Extensible Form control Map for multiple forms with field values, state, validation",
+  "private": false,
+  "type": "module",
+  "version": "0.5.0",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    "types": "./index.d.ts",
+    "default": "./index.js"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=12.20.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/applecube/form-ctrl-vanilla.git"
+  },
+  "keywords": [
+    "form",
+    "ctrl",
+    "control",
+    "multiple",
+    "fields",
+    "state",
+    "store"
+  ],
+  "author": "Alexander Lipatov",
+  "contributors": [],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/applecube/form-ctrl-vanilla/issues"
+  },
+  "homepage": "https://github.com/applecube/form-ctrl-vanilla",
+  "devDependencies": {
+    "eslint": "^9.20.1",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-prettier": "^5.2.3",
+    "globals": "^15.15.0",
+    "prettier": "^3.5.1",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.24.0"
+  }
+}
