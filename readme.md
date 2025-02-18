@@ -41,7 +41,7 @@ const {
   blurred, // count number
   messages, // [{ message: 'Must be more than 10', type: 'error' }]
   error, // boolean
-  warning. // boolean
+  warning, // boolean
 } = form.getFieldState('field_1');
 
 if (form.touched) { /*...*/ }
