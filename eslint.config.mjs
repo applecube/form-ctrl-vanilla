@@ -2,6 +2,7 @@ import globals from 'globals';
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettierPluginRecommended from 'eslint-plugin-prettier/recommended';
+import pluginJest from 'eslint-plugin-jest';
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -27,6 +28,20 @@ export default tseslint.config(
       globals: {
         ...globals.node,
       },
+    },
+  },
+  {
+    files: ['**/*.test.js'],
+    plugins: { jest: pluginJest },
+    languageOptions: {
+      globals: pluginJest.environments.globals.globals,
+    },
+    rules: {
+      'jest/no-disabled-tests': 'warn',
+      'jest/no-focused-tests': 'error',
+      'jest/no-identical-title': 'error',
+      'jest/prefer-to-have-length': 'warn',
+      'jest/valid-expect': 'error',
     },
   },
   {

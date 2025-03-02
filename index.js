@@ -1,19 +1,17 @@
-import { FormCtrl, formCtrlHolder } from './src/FormCtrl';
+import { FormCtrl } from './src/FormCtrl';
 
-const formCtrl = (formId) => formCtrlHolder.get(formId) || new FormCtrl(formId);
-
-formCtrl.FormCtrl = FormCtrl;
-
-formCtrl.formCtrl = formCtrl;
+export function formCtrl(formId) {
+  return FormCtrl.get(formId) || new FormCtrl(formId);
+}
 
 formCtrl.create = (formId, options) => new FormCtrl(formId, options);
 
-formCtrl.ensure = (formId, options) => formCtrlHolder.get(formId) || new FormCtrl(formId, options);
+formCtrl.ensure = (formId, options) => FormCtrl.get(formId) || new FormCtrl(formId, options);
 
-formCtrl.get = (formId) => formCtrlHolder.get(formId);
+formCtrl.get = (formId) => FormCtrl.get(formId);
 
-formCtrl.exists = (formId) => Boolean(formCtrlHolder.get(formId));
+formCtrl.exists = (formId) => Boolean(FormCtrl.get(formId));
 
-formCtrl.destroy = (formId) => formCtrlHolder.get(formId)?.destroy() || false;
+formCtrl.destroy = (formId) => FormCtrl.get(formId)?.destroy() || false;
 
 export default formCtrl;

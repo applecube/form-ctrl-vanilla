@@ -1,6 +1,6 @@
 import { ensureArray, everyItem } from './utils';
 
-export const formCtrlHolder = new Map();
+const formCtrlHolder = new Map();
 
 export class FormCtrl {
   constructor(formId, options) {
@@ -20,6 +20,10 @@ export class FormCtrl {
     this._validationMap = new Map();
 
     formCtrlHolder.set(formId, this);
+  }
+
+  static get(formId) {
+    return formCtrlHolder.get(formId);
   }
 
   destroy() {

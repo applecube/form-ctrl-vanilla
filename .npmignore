@@ -5,3 +5,7 @@ package-lock.json
 .vscode
 .prettierrc.cjs
 eslint.config.mjs
+jest.config.js
+
+coverage
+*.test.*
