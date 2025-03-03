@@ -1,10 +1,8 @@
-import { FormId, FormOptions, FormCtrl } from './src/FormCtrl';
-
-export default formCtrl;
+import type { FormId, FormOptions, FormCtrl } from './src/FormCtrl';
 
 export declare function formCtrl(formId: FormId): FormCtrl;
 
-declare namespace formCtrl {
+export declare namespace formCtrl {
   export const create: (formId: FormId, options?: Partial<FormOptions>) => FormCtrl;
 
   export const ensure: (formId: FormId, options?: Partial<FormOptions>) => FormCtrl;
@@ -15,3 +13,7 @@ declare namespace formCtrl {
 
   export const destroy: (formId: FormId) => boolean;
 }
+
+export * from './src/FormCtrl';
+
+export default formCtrl;
