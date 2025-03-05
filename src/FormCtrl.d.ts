@@ -36,8 +36,15 @@ export interface FormFieldValidationParams<V = unknown> extends Partial<FormFiel
   requiredValidate?: (value: V) => boolean | Promise<boolean>;
 }
 
+export type FormValidation = Record<FormField, FormFieldValidationParams>;
+
 export interface FormOptions {
   validationEventName: FormValidationEventName;
+}
+
+export interface FormConstructorOptions extends Partial<FormOptions> {
+  validation?: FormValidation;
+  values?: FormValues;
 }
 
 export interface FormState {
@@ -54,18 +61,13 @@ export interface FormFieldState {
   warning?: boolean;
 }
 
-export type FormFieldsRerenderRecord = Record<FormField, number | undefined>;
-
-export interface FormFieldUpdateData<V = unknown> {
-  messages?: FormFieldMessage | FormFieldMessage[];
-  required?: FormFieldValidationParams['required'];
-  requiredValidate?: FormFieldValidationParams['requiredValidate'];
-  validation?: FormFieldValidation<V>;
-  value?: V;
+export interface FormFieldData<V = unknown> extends FormFieldState {
+  value: V;
 }
 
 export interface FormValuesSetterOptions {
   byUser?: boolean;
+  skipChangeUpdate?: boolean;
   skipRerender?: boolean;
   skipValidation?: boolean;
 }
@@ -83,11 +85,17 @@ export class FormCtrl {
   protected readonly _stateMap: FormFieldsMap<FormFieldState>;
   protected readonly _validationMap: FormFieldsMap<FormFieldValidation>;
 
-  constructor(formId: FormId, options?: Partial<FormOptions>);
+  constructor(formId: FormId, options?: FormConstructorOptions);
 
   static get(formId: FormId): FormCtrl | undefined;
 
+  static keys(): FormId[];
+
   destroy(): boolean;
+
+  clear(clearValidation?: boolean): void;
+
+  reset(values: FormValues, validation?: FormValidation): void;
 
   protected rerenderFields(fields?: FormField | FormField[]): void;
 
@@ -103,13 +111,17 @@ export class FormCtrl {
 
   set options(opts: Partial<FormOptions>);
 
+  clearState(): void;
+
   getValue(field: FormField): unknown;
 
   getValues<F extends FormField = FormField>(fields?: F[]): Record<F, unknown>;
 
-  resetFieldState(field: FormField): FormFieldState;
+  clearFieldState(field: FormField): FormFieldState;
 
   getFieldState(field: FormField): FormFieldState;
+
+  getFieldData<V = unknown>(field: FormField): FormFieldData<V>;
 
   protected addFieldMessageInternal(fieldState: FormFieldState, message: FormFieldMessage): void;
 
@@ -117,7 +129,9 @@ export class FormCtrl {
 
   setFieldMessages(field: FormField, messages: FormFieldMessage | FormFieldMessage[], opts?: FormStateSetterOptions): void;
 
-  setValidation(field: FormField, params: FormFieldValidationParams): void;
+  setFieldValidation(field: FormField, params: FormFieldValidationParams): void;
+
+  setValidation(validation: FormValidation): void;
 
   protected validateFieldInternal(field: FormField, eventName?: FormValidationEventName): boolean | Promise<boolean>;
 
@@ -125,11 +139,15 @@ export class FormCtrl {
 
   validate(fields?: FormField | FormField[], eventName?: FormValidationEventName): boolean | Promise<boolean>;
 
-  protected setValueInternal(field: FormField, value: unknown, byUser?: boolean): void;
+  setValue(field: FormField, value: unknown, options?: FormValuesSetterOptions): void;
 
-  setValue(field: FormField, value: unknown, opts?: FormValuesSetterOptions): void;
+  setValues(values: FormValues, options?: FormValuesSetterOptions): void;
 
-  setValues(values: FormValues, opts?: FormValuesSetterOptions): void;
+  clearValues(options?: FormValuesSetterOptions): void;
+
+  resetValues(values: FormValues, options?: FormValuesSetterOptions): void;
+
+  protected onAfterValuesChange(fields: FormField | FormField[], options?: FormValuesSetterOptions): void;
 
   handleChange(field: FormField, e: unknown): void;
 

@@ -3,21 +3,24 @@ import { ensureArray, everyItem } from './utils';
 const formCtrlHolder = new Map();
 
 export class FormCtrl {
-  constructor(formId, options) {
+  constructor(formId, { validationEventName, validation, values } = {}) {
     this.id = formId;
 
-    const _options = options ? { ...options } : {};
-    _options.validationEventName = _options.validationEventName || 'onBlur';
-    this._options = _options;
-
-    this._state = {
-      touched: 0,
-      changed: 0,
+    this._options = {
+      validationEventName: validationEventName || 'onBlur',
     };
+
+    this._state = {};
 
     this._valuesMap = new Map();
     this._stateMap = new Map();
     this._validationMap = new Map();
+
+    this.clearState();
+
+    if (validation) this.setValidation(validation);
+
+    if (values) this.setValues(values, { skipChangeUpdate: true, skipRerender: true, skipValidation: true });
 
     formCtrlHolder.set(formId, this);
   }
@@ -26,8 +29,27 @@ export class FormCtrl {
     return formCtrlHolder.get(formId);
   }
 
+  static keys() {
+    return formCtrlHolder.keys();
+  }
+
   destroy() {
     return formCtrlHolder.delete(this.id);
+  }
+
+  clear(clearValidation) {
+    if (clearValidation) this._validationMap.clear();
+    this.clearState();
+    this.clearValues({ skipChangeUpdate: true });
+  }
+
+  reset(values, validation) {
+    if (validation) {
+      this._validationMap.clear();
+      this.setValidation(validation);
+    }
+    this.clearState();
+    this.resetValues(values, { skipChangeUpdate: true });
   }
 
   rerenderFields() {
@@ -57,6 +79,23 @@ export class FormCtrl {
     return false;
   }
 
+  get options() {
+    return { ...this._options };
+  }
+
+  set options(opts) {
+    Object.assign(this._options, opts);
+  }
+
+  clearState() {
+    for (const key in this._state) {
+      delete this._state[key];
+    }
+    this._state.touched = 0;
+    this._state.changed = 0;
+    this._stateMap.clear();
+  }
+
   // region GetValues
   getValue(field) {
     return this._valuesMap.get(field);
@@ -74,14 +113,21 @@ export class FormCtrl {
   }
 
   // region FieldState
-  resetFieldState(field) {
+  clearFieldState(field) {
     const fieldState = { touched: 0, changed: 0, blurred: 0 };
     this._stateMap.set(field, fieldState);
     return fieldState;
   }
 
   getFieldState(field) {
-    return this._stateMap.get(field) || this.resetFieldState(field);
+    return this._stateMap.get(field) || this.clearFieldState(field);
+  }
+
+  getFieldData(field) {
+    return {
+      ...this.getFieldState(field),
+      value: this.getValue(field),
+    };
   }
 
   addFieldMessageInternal(fieldState, message) {
@@ -111,7 +157,7 @@ export class FormCtrl {
   }
 
   // region Validation
-  setValidation(field, { eventName, rules, required, requiredValidate } = {}) {
+  setFieldValidation(field, { eventName, rules, required, requiredValidate } = {}) {
     const validation = {
       eventName,
       rules: rules || [],
@@ -132,6 +178,12 @@ export class FormCtrl {
     }
 
     this._validationMap.set(field, validation);
+  }
+
+  setValidation(validation) {
+    for (const field in validation) {
+      this.setFieldValidation(field, validation[field]);
+    }
   }
 
   validateFieldInternal(field, eventName = 'all') {
@@ -214,37 +266,55 @@ export class FormCtrl {
   }
 
   // region SetValues
-  setValueInternal(field, value, byUser) {
+  setValue(field, value, options) {
     this._valuesMap.set(field, value);
-
-    const ownState = this._state;
-    ownState.changed++;
-    if (byUser) ownState.touched++;
-
-    const fieldState = this.getFieldState(field);
-    fieldState.changed++;
-    if (byUser) fieldState.touched++;
+    this.onAfterValuesChange(field, options);
   }
 
-  setValue(field, value, { byUser, skipRerender, skipValidation } = {}) {
-    this.setValueInternal(field, value, byUser);
-
-    if (!skipValidation) {
-      const passedMaybePromise = this.validateFieldInternal(field, 'onChange');
-      if (passedMaybePromise instanceof Promise && !skipRerender) {
-        passedMaybePromise.then(() => this.rerenderFields(field));
-      }
-    }
-
-    if (!skipRerender) this.rerenderFields(field);
-  }
-
-  setValues(values, { byUser, skipRerender, skipValidation } = {}) {
+  setValues(values, options) {
     const fields = Object.keys(values);
     if (!fields.length) return;
 
     for (const field of fields) {
-      this.setValueInternal(field, values[field], byUser);
+      this._valuesMap.set(field, values[field]);
+    }
+
+    this.onAfterValuesChange(fields, options);
+  }
+
+  clearValues(options) {
+    const fields = this._valuesMap.keys();
+    this._valuesMap.clear();
+    this.onAfterValuesChange(fields, options);
+  }
+
+  resetValues(values, options) {
+    const fieldSet = new Set(this._valuesMap.keys());
+    this._valuesMap.clear();
+
+    for (const field in values) {
+      this._valuesMap.set(field, values[field]);
+      fieldSet.add(field);
+    }
+
+    this.onAfterValuesChange([...fieldSet], options);
+  }
+
+  onAfterValuesChange(fields, { byUser, skipChangeUpdate, skipRerender, skipValidation } = {}) {
+    if (!skipChangeUpdate) {
+      const ownState = this._state;
+
+      for (const field of ensureArray(fields)) {
+        const fieldState = this.getFieldState(field);
+
+        ownState.changed++;
+        fieldState.changed++;
+
+        if (byUser) {
+          ownState.touched++;
+          fieldState.touched++;
+        }
+      }
     }
 
     if (!skipValidation) {
