@@ -14,4 +14,6 @@ formCtrl.exists = (formId) => Boolean(FormCtrl.get(formId));
 
 formCtrl.destroy = (formId) => FormCtrl.get(formId)?.destroy() || false;
 
+formCtrl.keys = () => FormCtrl.keys();
+
 export default formCtrl;

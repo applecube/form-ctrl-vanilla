@@ -14,14 +14,14 @@ import formCtrl from 'form-ctrl-vanilla';
 const form = formCtrl.create('form_id_1', { validationEventName: 'onChange' });
 
 const form2 = formCtrl('form_id_2'); // get or create
-form2.setOptions({ validationEventName: 'onChange' });
+form2.options = { validationEventName: 'onChange' };
 
 form.setValues({ field_1: 5, field_2: 'asd' });
 
 form.handleChange('field_1', changeEvent); // changeEvent.target.value will be used
 form.handleBlur('field_1');
 
-form.setValidation('field_1', {
+form.setFieldValidation('field_1', {
   eventName: 'onChange',
   required: 'Required field',
   rules: [
@@ -49,6 +49,10 @@ if (form.changed) { /*...*/ }
 if (form.hasErrors) { /*...*/ }
 if (form.hasWarnings) { /*...*/ }
 
+form.clear();
+
+form.reset({ field_1: 4 });
+
 form.destroy();
 ```
 
@@ -57,7 +61,7 @@ form.destroy();
 [Implementation for React](https://github.com/applecube/form-ctrl-react)
 
 ```js
-import { FormCtrl as FormCtrlVanilla } from 'form-ctrl-vanilla';
+import { FormCtrl as FormCtrlVanilla } from 'form-ctrl-vanilla/FormCtrl';
 
 class FormCtrlCustom extends FormCtrlVanilla {
   constructor(options) {
