@@ -6,6 +6,7 @@ package-lock.json
 .prettierrc.cjs
 eslint.config.mjs
 jest.config.js
+tsconfig.json
 
 coverage
 *.test.*
