@@ -9,7 +9,7 @@ Zero dependency vanilla js form control map for multiple forms with values, stat
 ## Usage
 
 ```js
-import formCtrl from 'form-ctrl-vanilla';
+import { formCtrl } from 'form-ctrl-vanilla';
 
 const form = formCtrl.create('form_id_1', { validationEventName: 'onChange' });
 

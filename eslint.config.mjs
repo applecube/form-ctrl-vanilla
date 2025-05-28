@@ -9,7 +9,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   prettierPluginRecommended,
   {
-    files: ['*.js', '*.ts'],
+    files: ['**/*.ts'],
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: 'module',
@@ -30,7 +30,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['*.cjs'],
+    files: ['*.cjs', '*.js'],
     languageOptions: {
       globals: {
         ...globals.node,
@@ -38,7 +38,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.test.js'],
+    files: ['**/*.test.ts'],
     plugins: { jest: pluginJest },
     languageOptions: {
       globals: pluginJest.environments.globals.globals,
@@ -52,6 +52,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['node_modules'],
+    ignores: ['node_modules', 'dist', '.tshy*'],
   },
 );

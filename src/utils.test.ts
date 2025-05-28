@@ -1,4 +1,4 @@
-import { ensureArray, everyItem } from './utils';
+import { ensureArray, everyItem } from './utils.js';
 
 test('everyItem', () => {
   expect(everyItem([1, true, 3])).toBe(true);
