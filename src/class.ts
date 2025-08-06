@@ -61,11 +61,18 @@ export class FormCtrl {
 
   // region Form
 
-  // https://github.com/microsoft/TypeScript/issues/5863#issuecomment-169173943
+  /**
+   * Get form instance from internal store by id.
+   * Generic class type because of typescript static method issue.
+   * https://github.com/microsoft/TypeScript/issues/5863#issuecomment-169173943
+   */
   static get<T extends FormCtrl = FormCtrl>(formId: FormId): T | undefined {
     return formCtrlHolder.get(formId) as T | undefined;
   }
 
+  /**
+   * Get all form ids from internal store.
+   */
   static keys(): FormId[] {
     return [...formCtrlHolder.keys()];
   }
@@ -377,12 +384,19 @@ export class FormCtrl {
    *
    * OnChange event object must be provided as second argument.
    *
-   * Value will be taken from it as `e.target.value`.
+   * Value will be taken from it as `e.target.value` or `e.target.checked` for checkbox input.
    *
    * Generic `{ target: { value: '...' } }` is acceptable.
    */
   handleChange(field: FormField, e: any): void {
-    this.setValue(field, e.target.value, { byUser: true });
+    if (!e || typeof e !== 'object') return;
+
+    const el = e.target;
+    if (!el || typeof el !== 'object') return;
+
+    const value = el.type === 'checkbox' ? el.checked : el.value;
+
+    this.setValue(field, value, { byUser: true });
   }
 
   /**
