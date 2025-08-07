@@ -224,7 +224,110 @@ Returns `true` if internal store still had this form instance.
 
 ---
 
+#### `clearFieldState(field)`
 
+Resets field state to default `{ touched: 0, changed: 0, blurred: 0 }`.
+
+#### `getFieldState(field)`
+
+Gets field state. If there was none creates and returns default one.
+
+#### `getFieldData(field)`
+
+Gets field state and value `{ ...state, value }`.
+
+#### `clearFieldMessages(field, options)`
+
+Clears field messages, error, warning.
+
+#### `addFieldMessages(field, messages, { skipRerender })`
+
+Adds one or many field messages. Previous field messages are kept intact.
+`skipRerender` is described below.
+
+#### `resetFieldMessages(field, messages, { skipRerender })`
+
+Resets field messages to provided ones. Previous field messages are dropped.
+`skipRerender` is described below.
+
+---
+
+#### `getValue(field)`
+
+Gets field value. Value type can be specified for typescript version.
+
+#### `getValues(fields)`
+
+Gets fields values as plain object.
+If `fields` provided - returns values only for them.
+If not - returns all fields values.
+
+#### `setValue(field, value, valuesSetterOptions)`
+
+Sets field value with validation and other calculations.
+Provide `valuesSetterOptions` to control things happening other than setting value (details below).
+
+#### `setValues(values, valuesSetterOptions)`
+
+Sets fields values with validation and other calculations.
+`values` is plain object - field name as key, field value as value.
+Provide `valuesSetterOptions` to control things happening other than setting values (details below).
+
+#### `clearValues(valuesSetterOptions)`
+
+Clears all fields values (deletes records from store) with validation and other calculations.
+Provide `valuesSetterOptions` to control things happening other than clearing values (details below).
+
+#### `resetValues(values, valuesSetterOptions)`
+
+Clears all previous fields values records and sets provided ones.
+Validation, state change, rerender happen for previous and new fields combined.
+If field was there and provided again above things happen to it once.
+Provide `valuesSetterOptions` to control things happening other than resetting values (details below).
+
+#### `valuesSetterOptions` argument
+
+`valuesSetterOptions.byUser` - boolean, if value changed by user,
+usually when user enters value in input,
+triggers `onTouch` validation,
+increments `touched` and `changed` field state, otherwise only `changed` is incremented,
+default `false`,
+but will be `true` for `handleChange` method optimised for dom change event.
+
+`valuesSetterOptions.skipChangeUpdate` - boolean, skip incrementing `touched` and `changed` state.
+
+`valuesSetterOptions.skipRerender` - avoid triggering `rerenderFields` (which is empty by default for vanilla version).
+
+`valuesSetterOptions.skipValidation` - skip validation.
+
+---
+
+#### `handleChange(field, changeEvent)`
+
+Should be used on `change` event of input field.
+Form will set value, increment `touched` state, trigger `onTouch` validation.
+`change` event object must be provided as second argument.
+Value will be taken from it as `changeEvent.target.value`
+or `changeEvent.target.checked` for checkbox input.
+Generic `{ target: { value: '...' } }` is acceptable.
+See usage section above for example.
+
+#### `handleBlur(field)`
+
+Should be used on `blur` event of input field.
+Increments `blurred` state and trigger `onBlur` validation.
+See usage section above for example.
+
+---
+
+#### `validate(fields, eventName)`
+
+Trigger validation for one, many or all fields for specific event.
+If `fields` is not provided - trigger validation for all fields that have validation.
+Pass `eventName` to trigger only validation specified for that event, default `'all'`.
+Returns promise only if encounters promisified validate function.
+Trigger rerender after validation processed.
+If validation results in promise - await it and rerender after.
 
 ## Extend
 

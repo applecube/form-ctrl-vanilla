@@ -379,19 +379,19 @@ export class FormCtrl {
   // region DOM
 
   /**
-   * Should be used on onChange event of input field.
-   * Form will set value, trigger onChange validation, etc.
+   * Should be used on `change` event of input field.
+   * Form will set value, trigger `onTouch` validation, etc.
    *
-   * OnChange event object must be provided as second argument.
+   * `change` event object must be provided as second argument.
    *
-   * Value will be taken from it as `e.target.value` or `e.target.checked` for checkbox input.
+   * Value will be taken from it as `changeEvent.target.value` or `changeEvent.target.checked` for checkbox input.
    *
    * Generic `{ target: { value: '...' } }` is acceptable.
    */
-  handleChange(field: FormField, e: any): void {
-    if (!e || typeof e !== 'object') return;
+  handleChange(field: FormField, changeEvent: any): void {
+    if (!changeEvent || typeof changeEvent !== 'object') return;
 
-    const el = e.target;
+    const el = changeEvent.target;
     if (!el || typeof el !== 'object') return;
 
     const value = el.type === 'checkbox' ? el.checked : el.value;
@@ -400,8 +400,8 @@ export class FormCtrl {
   }
 
   /**
-   * Should be used on onBlur event of input field.
-   * Form will process this event for specified field and for example trigger onBlur validation.
+   * Should be used on `blur` event of input field.
+   * Increments `blurred` state and trigger `onBlur` validation.
    */
   handleBlur(field: FormField): void {
     const fieldState = this.getFieldState(field);
@@ -611,9 +611,10 @@ export class FormCtrl {
    *
    * Pass `eventName` to trigger only validation specified for that event, default `'all'`.
    *
-   * Returns promise only if at least one rule validate function for at least one field is promisified.
+   * Returns promise only if encounters promisified validate function.
    *
-   * Trigger rerender after validation processed. If validation results in promise - await it and rerender after.
+   * Trigger rerender after validation processed.
+   * If validation results in promise - await it and rerender after.
    */
   validate(
     fields?: FormField | FormField[],
