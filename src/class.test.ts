@@ -4,6 +4,7 @@ import type {
   FormFieldValidation,
   FormFieldValidationRule,
   FormId,
+  FormOptions,
   FormValidation,
   FormValues,
 } from './types.js';
@@ -47,12 +48,16 @@ const createComplexForm = (id: FormId) => {
   });
 };
 
+// region Base
+
 test('create, destroy', () => {
   const form = createComplexForm('form_1');
   expect(FormCtrl.get('form_1')).toBe(form);
   expect(form.destroy()).toBe(true);
   expect(FormCtrl.get('form_1')).toBe(undefined);
 });
+
+// region Values
 
 test('values', () => {
   const form = createComplexForm('form_2');
@@ -76,16 +81,28 @@ test('values', () => {
 
   form.clearValues();
   expect(form.getValues()).toStrictEqual({});
+  expect(form.getValues(['prop1'])).toStrictEqual({ prop1: undefined });
+
+  form.setValues({ prop1: 2, prop2: 'sdg', prop3: [2, 4], prop4: {} });
+  expect(form.getValues(['prop2', 'prop3'])).toStrictEqual({ prop2: 'sdg', prop3: [2, 4] });
 });
+
+// region State
 
 test('state', () => {
   const form = createComplexForm('form_3');
 
-  expect(form.options).toStrictEqual({
+  const defaultOptions: FormOptions = {
     requiredMessage: 'Required field',
     requiredValidate: form.options.requiredValidate,
     validationEventName: 'onBlur',
-  });
+  };
+
+  expect(form.options).toStrictEqual(defaultOptions);
+
+  form.options = { validationEventName: 'all' };
+  expect(form.options).toStrictEqual({ ...defaultOptions, validationEventName: 'all' });
+  form.options = defaultOptions;
 
   form.setValue('prop1', 4);
   form.setValue('prop1', 4, { byUser: true });
@@ -180,67 +197,150 @@ test('state', () => {
   expect(form.getFieldState('prop1')).toStrictEqual(clearedFieldState);
   expect(form.getFieldState('prop2')).toStrictEqual(clearedFieldState);
   expect(form.getFieldState('prop3')).toStrictEqual(clearedFieldState);
+
+  form.clear(true);
+  expect(form.getFieldValidation('prop1')).toBe(undefined);
+  expect(form.getFieldValidation('prop2')).toBe(undefined);
+  expect(form.getFieldValidation('prop3')).toBe(undefined);
+
+  form.setFieldValidation('prop1', { required: true });
+  form.reset({ prop1: 10 }, { prop1: { required: false } });
+  expect(form.getValues()).toStrictEqual({ prop1: 10 });
+  expect(form.getFieldValidation('prop1')).toStrictEqual({ required: false });
 });
 
-test('dom', () => {
+// region DOM
+
+describe('DOM', () => {
   const form = createComplexForm('form_4');
-  form.setValue('checkbox_field', false);
-  form.handleChange('checkbox_field', { target: { type: 'checkbox', checked: true, value: 'on' } });
-  form.handleChange('prop1', { target: { value: 8 } });
 
-  expect(form.getValues()).toStrictEqual({
-    ...createComplexValues(),
-    prop1: 8,
-    checkbox_field: true,
+  test('handleChange', () => {
+    form.setValue('checkbox_field', false);
+    form.handleChange('checkbox_field', {
+      target: { type: 'checkbox', checked: true, value: 'on' },
+    });
+    form.handleChange('prop1', { target: { value: 8 } });
+
+    expect(form.getValues()).toStrictEqual({
+      ...createComplexValues(),
+      prop1: 8,
+      checkbox_field: true,
+    });
+
+    expect(form.changed).toBe(3);
+    expect(form.touched).toBe(2);
   });
 
-  expect(form.changed).toBe(3);
-  expect(form.touched).toBe(2);
+  test('handleBlur', () => {
+    form.clearState();
+    form.handleBlur('prop1');
 
-  form.clearState();
-  form.handleBlur('prop1');
-
-  expect(form.getFieldState('prop1')).toStrictEqual({
-    changed: 0,
-    touched: 0,
-    blurred: 1,
-    error: false,
-    warning: false,
-    messages: [],
+    expect(form.getFieldState('prop1')).toStrictEqual({
+      changed: 0,
+      touched: 0,
+      blurred: 1,
+      error: false,
+      warning: false,
+      messages: [],
+    });
   });
 });
 
-test('validation options', () => {
+// region Validation options
+
+describe('Validation options', () => {
   const form = createComplexForm('form_5');
 
   const prop1Validation = createComplexValidation()['prop1'] as FormFieldValidation;
   const prop1Rules = prop1Validation.rules as FormFieldValidationRule[];
 
-  expect(form.getFieldValidation('prop1')).toStrictEqual(prop1Validation);
-  expect(form.getFieldValidation('prop2')).toBe(undefined);
-
-  expect(form.clearFieldValidation('prop1')).toBe(true);
-  expect(form.getFieldValidation('prop1')).toBe(undefined);
-
-  expect(form.ensureFieldValidation('prop1')).toStrictEqual({});
-  expect(form.getFieldValidation('prop1')).toStrictEqual({});
-  expect(form.clearFieldValidation('prop1')).toBe(true);
-
-  form.addFieldValidationRules('prop1', prop1Rules);
-  expect(form.getFieldValidation('prop1')).toStrictEqual({
-    rules: prop1Rules,
+  test('field validation: get', () => {
+    expect(form.getFieldValidation('prop1')).toStrictEqual(prop1Validation);
+    expect(form.getFieldValidation('prop2')).toBe(undefined);
   });
 
-  const addProp1Validation: FormFieldValidation = {
-    required: true,
-    eventName: 'onBlur',
-  };
-  form.setFieldValidation('prop1', addProp1Validation);
-  expect(form.getFieldValidation('prop1')).toStrictEqual({
-    rules: prop1Rules,
-    ...addProp1Validation,
+  test('field validation: ensure, clear', () => {
+    expect(form.clearFieldValidation('prop1')).toBe(true);
+    expect(form.getFieldValidation('prop1')).toBe(undefined);
+
+    expect(form.ensureFieldValidation('prop1')).toStrictEqual({});
+    expect(form.getFieldValidation('prop1')).toStrictEqual({});
+    expect(form.clearFieldValidation('prop1')).toBe(true);
   });
 
-  form.resetFieldValidation('prop1', addProp1Validation);
-  expect(form.getFieldValidation('prop1')).toStrictEqual(addProp1Validation);
+  test('field validation: add rules', () => {
+    form.clearFieldValidation('prop1');
+    form.addFieldValidationRules('prop1', prop1Rules);
+    expect(form.getFieldValidation('prop1')).toStrictEqual({
+      rules: prop1Rules,
+    });
+  });
+
+  test('field validation: set, reset', () => {
+    form.clearFieldValidation('prop1');
+    form.addFieldValidationRules('prop1', prop1Rules);
+
+    const addProp1Validation: FormFieldValidation = {
+      required: true,
+      eventName: 'onBlur',
+    };
+
+    form.setFieldValidation('prop1', addProp1Validation);
+    expect(form.getFieldValidation('prop1')).toStrictEqual({
+      rules: prop1Rules,
+      ...addProp1Validation,
+    });
+
+    form.resetFieldValidation('prop1', addProp1Validation);
+    expect(form.getFieldValidation('prop1')).toStrictEqual(addProp1Validation);
+  });
+});
+
+// region Validate
+
+describe('Validate', () => {
+  const form = createComplexForm('form_6');
+
+  test('validate with no validation event', () => {
+    expect(form.validate('prop1', 'onBlur')).toBe(true);
+  });
+
+  test('validate with existing validation event', () => {
+    expect(form.validate('prop1', 'onTouch')).toBe(false);
+    expect(form.getFieldState('prop1').messages).toStrictEqual([
+      { type: 'success', message: 'More than 4' },
+      { type: 'warning', message: 'More than 7' },
+    ]);
+  });
+
+  test('validate with default setValue validation event onChange', () => {
+    form.setValue('prop1', 8);
+    expect(form.getFieldState('prop1').messages).toStrictEqual([]);
+  });
+
+  test('validate with default handleChange validation event onTouch', () => {
+    form.handleChange('prop1', { target: { value: 2 } });
+    expect(form.getFieldState('prop1').messages).toStrictEqual([
+      { type: 'error', message: 'More than 4' },
+      { type: 'warning', message: 'More than 7' },
+    ]);
+  });
+
+  test('promisified validate', async () => {
+    form.resetValidation({
+      prop2: {
+        rules: [
+          {
+            message: 'Length less than 5',
+            validate: (val: string) => Promise.resolve(val.length < 5),
+          },
+        ],
+      },
+    });
+
+    const result = form.validate();
+
+    expect(result instanceof Promise).toBe(true);
+    await expect(result).resolves.toBe(true);
+  });
 });

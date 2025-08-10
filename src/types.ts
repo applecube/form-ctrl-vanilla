@@ -7,31 +7,33 @@ export interface FormFieldMessage {
   type?: FormFieldMessageType;
 }
 
+type Value = any;
+
 export type FormField = string | number | symbol;
 
-export type FormValues = Record<FormField, unknown>;
+export type FormValues = Record<FormField, Value>;
 
-export type FormFieldsMap<D = unknown> = Map<FormField, D>;
+export type FormFieldsMap<D = Value> = Map<FormField, D>;
 
 export type FormValidationEventName = 'onTouch' | 'onChange' | 'onBlur' | 'all';
 
-export type FormFieldValidate<V = unknown> = (
+export type FormFieldValidate<V = Value> = (
   value: V,
   formValues?: FormValues,
 ) => boolean | Promise<boolean>;
 
-export type FormFieldRequiredValidate<V = unknown> = (value: V) => boolean | Promise<boolean>;
+export type FormFieldRequiredValidate<V = Value> = (value: V) => boolean | Promise<boolean>;
 
-export interface FormFieldValidationRule<V = unknown> extends FormFieldMessage {
+export interface FormFieldValidationRule<V = Value> extends FormFieldMessage {
   validate?: FormFieldValidate<V>;
   typeIfPassed?: FormFieldMessageType;
   needAllValues?: boolean;
   eventName?: FormValidationEventName;
 }
 
-export type FormFieldRequired<V = unknown> = boolean | string | FormFieldValidationRule<V>;
+export type FormFieldRequired<V = Value> = boolean | string | FormFieldValidationRule<V>;
 
-export interface FormFieldValidation<V = unknown> {
+export interface FormFieldValidation<V = Value> {
   eventName?: FormValidationEventName;
   rules?: FormFieldValidationRule<V>[];
   required?: FormFieldRequired<V>;
@@ -65,7 +67,7 @@ export interface FormFieldState {
   warning?: boolean;
 }
 
-export interface FormFieldData<V = unknown> extends FormFieldState {
+export interface FormFieldData<V = Value> extends FormFieldState {
   value: V;
 }
 

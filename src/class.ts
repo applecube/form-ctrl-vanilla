@@ -412,7 +412,7 @@ export class FormCtrl {
   // region Validation
 
   /**
-   * Gets field validation record. Returns `undefined` if there was no record.
+   * Gets field validation record. Returns `undefined` if there is no record.
    * This record can be directly changed (is mutable).
    */
   getFieldValidation(field: FormField): FormFieldValidation | undefined {

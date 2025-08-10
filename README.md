@@ -329,6 +329,48 @@ Returns promise only if encounters promisified validate function.
 Trigger rerender after validation processed.
 If validation results in promise - await it and rerender after.
 
+#### `getFieldValidation(field)`
+
+Gets field validation record.
+Returns `undefined` if there is no record.
+This record can be directly changed (is mutable).
+
+#### `clearFieldValidation(field)`
+
+Remove field validation record.
+Returns `true` if there was a record, `false` otherwise.
+
+#### `ensureFieldValidation(field)`
+
+Ensures field validation record and returns it.
+
+#### `addFieldValidationRules(field, rules)`
+
+Ensures field validation record and adds provided rule or rules to it.
+Previous rules, if there were any, are kept intact.
+
+#### `setFieldValidation(field, partialFieldValidation)`
+
+Ensures field validation record and overrides provided params in it.
+Rules will be fully overriden.
+To add validation rules without full override use `addFieldValidationRules`.
+
+#### `resetFieldValidation(field, fieldValidation)`
+
+Overrides field validation with provided one.
+
+#### `clearValidation()`
+
+Clears all fields validations.
+
+#### `setValidation(someFieldsValidation)`
+
+Overrides validation for provided fields. Other fields validations are kept intact.
+
+#### `resetValidation(allFieldsValidation)`
+
+Clears all fields validations and sets provided ones.
+
 ## Extend
 
 ### Implementation for React
