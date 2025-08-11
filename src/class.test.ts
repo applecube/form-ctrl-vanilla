@@ -50,70 +50,85 @@ const createComplexForm = (id: FormId) => {
 
 // region Base
 
-test('create, destroy', () => {
-  const form = createComplexForm('form_1');
-  expect(FormCtrl.get('form_1')).toBe(form);
-  expect(form.destroy()).toBe(true);
-  expect(FormCtrl.get('form_1')).toBe(undefined);
+describe('Base', () => {
+  test('create, get', () => {
+    const form = createComplexForm('form_1');
+    expect(FormCtrl.get('form_1')).toBe(form);
+  });
+
+  test('destroy', () => {
+    const form = createComplexForm('form_1');
+    expect(form.destroy()).toBe(true);
+    expect(FormCtrl.get('form_1')).toBe(undefined);
+  });
+
+  test('keys, destroyAll', () => {
+    FormCtrl.destroyAll();
+    createComplexForm('form_a');
+    createComplexForm('form_b');
+    createComplexForm('form_c');
+    expect(FormCtrl.keys()).toStrictEqual(['form_a', 'form_b', 'form_c']);
+  });
 });
 
 // region Values
 
-test('values', () => {
+describe('Values', () => {
   const form = createComplexForm('form_2');
   const valuesCopy = createComplexValues();
 
-  expect(form.getValues()).toStrictEqual(valuesCopy);
-  expect(form.getValue('prop1')).toBe(valuesCopy['prop1']);
+  test('get value(s)', () => {
+    expect(form.getValues()).toStrictEqual(valuesCopy);
+    expect(form.getValue('prop1')).toBe(valuesCopy['prop1']);
+  });
 
-  form.setValue('prop1', 2);
-  expect(form.getValue('prop1')).toBe(2);
-  valuesCopy['prop1'] = 2;
+  test('set value(s)', () => {
+    form.setValue('prop1', 2);
+    expect(form.getValue('prop1')).toBe(2);
+    valuesCopy['prop1'] = 2;
 
-  const addValues = { prop4: 'vvv', prop5: { a: 4 } };
-  form.setValues(addValues);
+    const addValues = { prop4: 'vvv', prop5: { a: 4 } };
+    form.setValues(addValues);
 
-  expect(form.getValues()).toStrictEqual({ ...valuesCopy, ...addValues });
+    expect(form.getValues()).toStrictEqual({ ...valuesCopy, ...addValues });
+  });
 
-  const newValues = { prop7: 9 };
-  form.resetValues(newValues);
-  expect(form.getValues()).toStrictEqual(newValues);
+  test('reset values', () => {
+    const newValues = { prop7: 9 };
+    form.resetValues(newValues);
+    expect(form.getValues()).toStrictEqual(newValues);
+  });
 
-  form.clearValues();
-  expect(form.getValues()).toStrictEqual({});
-  expect(form.getValues(['prop1'])).toStrictEqual({ prop1: undefined });
+  test('clear values', () => {
+    form.clearValues();
+    expect(form.getValues()).toStrictEqual({});
+  });
 
-  form.setValues({ prop1: 2, prop2: 'sdg', prop3: [2, 4], prop4: {} });
-  expect(form.getValues(['prop2', 'prop3'])).toStrictEqual({ prop2: 'sdg', prop3: [2, 4] });
+  test('get partial values', () => {
+    form.clearValues();
+    expect(form.getValues(['prop1'])).toStrictEqual({ prop1: undefined });
+
+    form.setValues({ prop1: 2, prop2: 'sdg', prop3: [2, 4], prop4: {} });
+    expect(form.getValues(['prop2', 'prop3'])).toStrictEqual({ prop2: 'sdg', prop3: [2, 4] });
+  });
 });
 
 // region State
 
-test('state', () => {
-  const form = createComplexForm('form_3');
-
-  const defaultOptions: FormOptions = {
-    requiredMessage: 'Required field',
-    requiredValidate: form.options.requiredValidate,
-    validationEventName: 'onBlur',
+describe('State', () => {
+  const clearedFieldState = {
+    touched: 0,
+    changed: 0,
+    blurred: 0,
   };
 
-  expect(form.options).toStrictEqual(defaultOptions);
+  const changeValues = (form: FormCtrl) => {
+    form.setValue('prop1', 4);
+    form.setValue('prop1', 4, { byUser: true });
+    form.setValue('prop2', 'dfg', { byUser: true });
+  };
 
-  form.options = { validationEventName: 'all' };
-  expect(form.options).toStrictEqual({ ...defaultOptions, validationEventName: 'all' });
-  form.options = defaultOptions;
-
-  form.setValue('prop1', 4);
-  form.setValue('prop1', 4, { byUser: true });
-  form.setValue('prop2', 'dfg', { byUser: true });
-
-  expect(form.changed).toBe(3);
-  expect(form.touched).toBe(2);
-  expect(form.hasErrors).toBe(true);
-  expect(form.hasWarnings).toBe(true);
-
-  const prop1State = {
+  const prop1StateAfterValuesChange = {
     touched: 1,
     changed: 2,
     blurred: 0,
@@ -125,88 +140,113 @@ test('state', () => {
     ],
   };
 
-  expect(form.getFieldState('prop1')).toStrictEqual(prop1State);
+  test('form options', () => {
+    const form = createComplexForm('form_options');
 
-  const addMsg: FormFieldMessage = { type: 'success', message: 'Success' };
-  const addMsgs: FormFieldMessage[] = [
-    { type: 'success', message: 'Success' },
-    { type: 'info', message: 'Info' },
-  ];
+    const defaultOptions: FormOptions = {
+      requiredMessage: 'Required field',
+      requiredValidate: form.options.requiredValidate,
+      validationEventName: 'onBlur',
+    };
 
-  form.addFieldMessages('prop1', addMsg);
-  form.addFieldMessages('prop1', addMsgs);
+    expect(form.options).toStrictEqual(defaultOptions);
 
-  expect(form.getFieldState('prop1')).toStrictEqual({
-    ...prop1State,
-    messages: [...prop1State.messages, addMsg, ...addMsgs],
+    form.options = { validationEventName: 'all' };
+    expect(form.options).toStrictEqual({ ...defaultOptions, validationEventName: 'all' });
+    form.options = defaultOptions;
   });
 
-  form.resetFieldMessages('prop1', addMsg);
+  test('form state params', () => {
+    const form = createComplexForm('form_state_params');
 
-  expect(form.getFieldState('prop1')).toStrictEqual({
-    ...prop1State,
-    error: false,
-    warning: false,
-    messages: [addMsg],
+    changeValues(form);
+
+    expect(form.changed).toBe(3);
+    expect(form.touched).toBe(2);
+    expect(form.hasErrors).toBe(true);
+    expect(form.hasWarnings).toBe(true);
   });
 
-  form.clearFieldMessages('prop1');
+  test('field state: get, clear', () => {
+    const form = createComplexForm('form_field_state');
+    expect(form.getFieldState('prop1')).toStrictEqual(clearedFieldState);
 
-  expect(form.getFieldState('prop1')).toStrictEqual({
-    ...prop1State,
-    error: false,
-    warning: false,
-    messages: [],
+    changeValues(form);
+    expect(form.getFieldState('prop1')).toStrictEqual(prop1StateAfterValuesChange);
+    expect(form.getFieldData('prop1')).toStrictEqual({ ...prop1StateAfterValuesChange, value: 4 });
+
+    form.clearFieldState('prop1');
+    expect(form.getFieldState('prop1')).toStrictEqual(clearedFieldState);
+    expect(form.getFieldState('prop2')).not.toStrictEqual(clearedFieldState);
+
+    expect(form.getFieldData('prop1')).toStrictEqual({ ...clearedFieldState, value: 4 });
   });
 
-  expect(form.getFieldData('prop1')).toStrictEqual({
-    ...prop1State,
-    error: false,
-    warning: false,
-    messages: [],
-    value: 4,
+  test('field messages', () => {
+    const form = createComplexForm('form_field_state_messages');
+
+    const addMsg: FormFieldMessage = { type: 'success', message: 'Success' };
+    const addMsgs: FormFieldMessage[] = [
+      { type: 'success', message: 'Success' },
+      { type: 'info', message: 'Info' },
+    ];
+
+    changeValues(form);
+
+    form.addFieldMessages('prop1', addMsg);
+    form.addFieldMessages('prop1', addMsgs);
+
+    expect(form.getFieldState('prop1')).toStrictEqual({
+      ...prop1StateAfterValuesChange,
+      messages: [...prop1StateAfterValuesChange.messages, addMsg, ...addMsgs],
+    });
+
+    form.resetFieldMessages('prop1', addMsg);
+
+    expect(form.getFieldState('prop1')).toStrictEqual({
+      ...prop1StateAfterValuesChange,
+      error: false,
+      warning: false,
+      messages: [addMsg],
+    });
+
+    form.clearFieldMessages('prop1');
+
+    expect(form.getFieldState('prop1')).toStrictEqual({
+      ...prop1StateAfterValuesChange,
+      error: false,
+      warning: false,
+      messages: [],
+    });
+
+    expect(form.hasErrors).toBe(false);
+    expect(form.hasWarnings).toBe(false);
   });
 
-  expect(form.getFieldData('prop2')).toStrictEqual({
-    touched: 1,
-    changed: 1,
-    blurred: 0,
-    value: 'dfg',
+  test('form clear, reset', () => {
+    const form = createComplexForm('form_clear_reset');
+
+    changeValues(form);
+    form.clearState();
+
+    expect(form.touched).toBe(0);
+    expect(form.changed).toBe(0);
+    expect(form.hasErrors).toBe(false);
+    expect(form.hasWarnings).toBe(false);
+    expect(form.getFieldState('prop1')).toStrictEqual(clearedFieldState);
+    expect(form.getFieldState('prop2')).toStrictEqual(clearedFieldState);
+    expect(form.getFieldState('prop3')).toStrictEqual(clearedFieldState);
+
+    form.clear(true);
+    expect(form.getFieldValidation('prop1')).toBe(undefined);
+    expect(form.getFieldValidation('prop2')).toBe(undefined);
+    expect(form.getFieldValidation('prop3')).toBe(undefined);
+
+    form.setFieldValidation('prop1', { required: true });
+    form.reset({ prop1: 10 }, { prop1: { required: false } });
+    expect(form.getValues()).toStrictEqual({ prop1: 10 });
+    expect(form.getFieldValidation('prop1')).toStrictEqual({ required: false });
   });
-
-  expect(form.hasErrors).toBe(false);
-  expect(form.hasWarnings).toBe(false);
-
-  form.clearFieldState('prop1');
-
-  const clearedFieldState = {
-    touched: 0,
-    changed: 0,
-    blurred: 0,
-  };
-
-  expect(form.getFieldState('prop1')).toStrictEqual(clearedFieldState);
-  expect(form.getFieldState('prop2')).not.toStrictEqual(clearedFieldState);
-
-  form.clearState();
-
-  expect(form.touched).toBe(0);
-  expect(form.changed).toBe(0);
-  expect(form.hasErrors).toBe(false);
-  expect(form.hasWarnings).toBe(false);
-  expect(form.getFieldState('prop1')).toStrictEqual(clearedFieldState);
-  expect(form.getFieldState('prop2')).toStrictEqual(clearedFieldState);
-  expect(form.getFieldState('prop3')).toStrictEqual(clearedFieldState);
-
-  form.clear(true);
-  expect(form.getFieldValidation('prop1')).toBe(undefined);
-  expect(form.getFieldValidation('prop2')).toBe(undefined);
-  expect(form.getFieldValidation('prop3')).toBe(undefined);
-
-  form.setFieldValidation('prop1', { required: true });
-  form.reset({ prop1: 10 }, { prop1: { required: false } });
-  expect(form.getValues()).toStrictEqual({ prop1: 10 });
-  expect(form.getFieldValidation('prop1')).toStrictEqual({ required: false });
 });
 
 // region DOM

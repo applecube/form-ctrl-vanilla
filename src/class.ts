@@ -78,6 +78,13 @@ export class FormCtrl {
   }
 
   /**
+   * Removes all form instances from internal store.
+   */
+  static destroyAll(): void {
+    formCtrlHolder.clear();
+  }
+
+  /**
    * Removes form instance from internal store.
    */
   destroy(): boolean {
