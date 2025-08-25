@@ -14,4 +14,7 @@ test('formCtrl', () => {
   expect(formCtrl('id2')).not.toBe(undefined);
 
   expect(formCtrl.keys()).toStrictEqual(['id1', 'id2']);
+
+  formCtrl.destroyAll();
+  expect(formCtrl.keys()).toStrictEqual([]);
 });

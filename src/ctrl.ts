@@ -1,29 +1,29 @@
 import { FormCtrl } from './class.js';
-import type { FormId, FormConstructorOptions } from './types.js';
+import type { FormId, FormConstructorOptions, FormValues } from './types.js';
 
-export interface FormCtrlFunction<
-  C extends typeof FormCtrl = typeof FormCtrl,
-  O extends FormConstructorOptions = FormConstructorOptions,
-> {
-  (formId: FormId): InstanceType<C>;
+interface FormCtrlFunction {
+  <FV extends object = FormValues>(formId: FormId): FormCtrl<FV>;
 
-  FormCtrl: C;
+  create: <FV extends object = FormValues>(
+    formId: FormId,
+    options?: FormConstructorOptions<FV>,
+  ) => FormCtrl<FV>;
 
-  create: (formId: FormId, options?: O) => InstanceType<C>;
-
-  get: (formId: FormId) => InstanceType<C> | undefined;
+  get: <FV extends object = FormValues>(formId: FormId) => FormCtrl<FV> | undefined;
 
   keys: () => FormId[];
+
+  destroyAll: () => void;
 }
 
 export const formCtrl: FormCtrlFunction = (formId) => {
-  return formCtrl.FormCtrl.get<FormCtrl>(formId) || new formCtrl.FormCtrl(formId);
+  return FormCtrl.get(formId) || new FormCtrl(formId);
 };
 
-formCtrl.FormCtrl = FormCtrl;
+formCtrl.create = (formId, options) => new FormCtrl(formId, options);
 
-formCtrl.create = (formId, options) => new formCtrl.FormCtrl(formId, options);
+formCtrl.get = (formId: FormId) => FormCtrl.get(formId);
 
-formCtrl.get = (formId) => formCtrl.FormCtrl.get<FormCtrl>(formId);
+formCtrl.keys = () => FormCtrl.keys();
 
-formCtrl.keys = () => formCtrl.FormCtrl.keys();
+formCtrl.destroyAll = () => FormCtrl.destroyAll();
