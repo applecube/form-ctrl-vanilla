@@ -1,3 +1,81 @@
+- [`formCtrl`](#formctrl)
+    - [`formCtrl(id)`](#formctrlid)
+    - [`formCtrl.create(id, constructorOptions?)`](#formctrlcreateid-constructoroptions)
+    - [`formCtrl.get(id)`](#formctrlgetid)
+    - [`formCtrl.keys()`](#formctrlkeys)
+    - [`formCtrl.destroyAll()`](#formctrldestroyall)
+- [`FormCtrl` instance](#formctrl-instance)
+  - [FormOptions](#formoptions)
+    - [`formOptions.defaultValues`](#formoptionsdefaultvalues)
+    - [`formOptions.onValueChange(field, value, prevValue, onChangeOptions?)`](#formoptionsonvaluechangefield-value-prevvalue-onchangeoptions)
+    - [`formOptions.onMessagesChange(field, messages, prevMessages, onChangeOptions?)`](#formoptionsonmessageschangefield-messages-prevmessages-onchangeoptions)
+    - [`formOptions.onErrorChange(field, error, prevError, onChangeOptions?)`](#formoptionsonerrorchangefield-error-preverror-onchangeoptions)
+    - [`formOptions.onWarningChange(field, warning, prevWarning, onChangeOptions?)`](#formoptionsonwarningchangefield-warning-prevwarning-onchangeoptions)
+    - [`formOptions.validationEventName`](#formoptionsvalidationeventname)
+    - [`formOptions.requiredValidate`](#formoptionsrequiredvalidate)
+    - [`formOptions.requiredMessage`](#formoptionsrequiredmessage)
+  - [ConstructorOptions](#constructoroptions)
+    - [`constructorOptions.values`](#constructoroptionsvalues)
+    - [`constructorOptions.register`](#constructoroptionsregister)
+    - [`constructorOptions.validation`](#constructoroptionsvalidation)
+  - [Properties](#properties)
+    - [`id` (readonly)](#id-readonly)
+    - [`options`](#options)
+    - [`touched` (readonly)](#touched-readonly)
+    - [`changed` (readonly)](#changed-readonly)
+    - [`blurred` (readonly)](#blurred-readonly)
+    - [`hasErrors` (readonly)](#haserrors-readonly)
+    - [`hasWarnings` (readonly)](#haswarnings-readonly)
+  - [Form](#form)
+    - [`clearState()`](#clearstate)
+    - [`clear()`](#clear)
+    - [`reset(newValues?)`](#resetnewvalues)
+    - [`destroy()`](#destroy)
+  - [FieldState](#fieldstate)
+    - [`clearFieldState(field)`](#clearfieldstatefield)
+    - [`getFieldState(field)`](#getfieldstatefield)
+    - [`forceFieldError(field, error)`](#forcefielderrorfield-error)
+    - [`forceFieldWarning(field, warning)`](#forcefieldwarningfield-warning)
+    - [`unforceFieldError(field)`](#unforcefielderrorfield)
+    - [`unforceFieldWarning(field)`](#unforcefieldwarningfield)
+    - [`clearFieldMessages(field)`](#clearfieldmessagesfield)
+    - [`clearFieldValidationMessages(field)`](#clearfieldvalidationmessagesfield)
+    - [`clearFieldCustomMessages(field)`](#clearfieldcustommessagesfield)
+    - [`addFieldCustomMessages(field, messages)`](#addfieldcustommessagesfield-messages)
+    - [`resetFieldCustomMessages(field, messages)`](#resetfieldcustommessagesfield-messages)
+    - [`clearMessages(fields?)`](#clearmessagesfields)
+    - [`clearValidationMessages(fields?)`](#clearvalidationmessagesfields)
+    - [`clearCustomMessages(fields?)`](#clearcustommessagesfields)
+  - [Values](#values)
+    - [`getValue(field)`](#getvaluefield)
+    - [`getValues(fields?)`](#getvaluesfields)
+    - [`setValue(field, value, valuesSetterOptions?)`](#setvaluefield-value-valuessetteroptions)
+    - [`setValues(values, valuesSetterOptions?)`](#setvaluesvalues-valuessetteroptions)
+    - [`clearValues(valuesSetterOptions?)`](#clearvaluesvaluessetteroptions)
+    - [`resetValues(newValues?, valuesSetterOptions?)`](#resetvaluesnewvalues-valuessetteroptions)
+    - [`valuesSetterOptions` argument](#valuessetteroptions-argument)
+  - [DOM](#dom)
+    - [`registerField(field, element)`](#registerfieldfield-element)
+    - [`register(elementsMap)`](#registerelementsmap)
+    - [`handleInput(field, event?)`](#handleinputfield-event)
+    - [`handleBlur(field)`](#handleblurfield)
+  - [FieldValidation](#fieldvalidation)
+  - [Validate](#validate)
+    - [`validateField(field, eventName?)`](#validatefieldfield-eventname)
+    - [`validate(fields?, eventName?)`](#validatefields-eventname)
+  - [ValidationSettings](#validationsettings)
+    - [`getFieldValidation(field)`](#getfieldvalidationfield)
+    - [`addFieldValidationRules(field, rules)`](#addfieldvalidationrulesfield-rules)
+    - [`clearFieldValidation(field)`](#clearfieldvalidationfield)
+    - [`setFieldValidation(field, partialFieldValidation)`](#setfieldvalidationfield-partialfieldvalidation)
+    - [`resetFieldValidation(field, fieldValidation)`](#resetfieldvalidationfield-fieldvalidation)
+    - [`getValidation()`](#getvalidation)
+    - [`clearValidation()`](#clearvalidation)
+    - [`setValidation(someFieldsValidation)`](#setvalidationsomefieldsvalidation)
+    - [`resetValidation(allFieldsValidation)`](#resetvalidationallfieldsvalidation)
+
+---
+
 # `formCtrl`
 
 Wrapper around `FormCtrl` class for convenience.
@@ -10,12 +88,11 @@ Get `FormCtrl` instance by `id`.
 If none found - creates one (at least for type convenience).
 For strict `get` use `formCtrl.get(id)`.
 
-### `formCtrl.create(id, options)`
+### `formCtrl.create(id, constructorOptions?)`
 
 Create `FormCtrl` instance and register it in internal store by `id`.
 Rewrite if there is already one for this `id`.
-Same as `new FormCtrl(id, options)`.
-Constructor options description is below.
+Same as `new FormCtrl(id, constructorOptions)`.
 
 ### `formCtrl.get(id)`
 
@@ -31,6 +108,7 @@ Same as `FormCtrl.keys()`.
 ### `formCtrl.destroyAll()`
 
 Destroy all current forms (remove from internal store).
+Same as `FormCtrl.destroyAll()`
 
 ---
 
@@ -38,6 +116,8 @@ Destroy all current forms (remove from internal store).
 
 Each `FormCtrl` instance has id and registers itself in internal Map by this id for later retrieval.
 Each instance has its own field values, states, validation, options.
+
+---
 
 ## FormOptions
 
@@ -92,6 +172,8 @@ Details are in `FieldValidation` section.
 Default required failure validation message for all fields.
 Details are in `FieldValidation` section.
 
+---
+
 ## ConstructorOptions
 
 used in
@@ -116,68 +198,7 @@ but without ability to get unregister functions.
 Object with form `Field` as key and `FieldValidation` as value.
 Same as calling `form.setValidation(validation)`.
 
-## FieldValidation
-
-Schema:
-
-```js
-{
-  required: boolean | string | Rule,
-  requiredValidate: (value) => boolean | Promise<boolean>,
-  eventName: 'onTouch' | 'onChange' | 'onBlur' | 'all',
-  rules: [
-    {
-      message: string,
-      type: 'error' | 'warning' | 'success' | 'info',
-      typeIfPassed: 'error' | 'warning' | 'success' | 'info',
-      needMoreValues: boolean | field[],
-      validate: (value, formValues) => boolean | Promise<boolean>,
-      eventName: 'onTouch' | 'onChange' | 'onBlur' | 'all',
-    },
-    Rule,
-    Rule,
-    ...
-  ]
-}
-```
-
-Every parameter is optional.
-
-`required` is separate validation because the most used one and can have a special ui meaning as asterisk in label.
-Usually used as boolean flag.
-It has its default simple validate function instance wide,
-but can be rewritten with `options.requiredValidate` or validation object `requiredValidate`.
-Required message is provided instance wide as `options.requiredMessage` or as a string value of `required` validation parameter.
-For detailed `required` configuration - `Rule` object can be passed as `required` validation parameter.
-
-Validation results in field state messages change
-(`form.getFieldState('field_1').messages = [{ message, type }, ...]`)
-and boolean flag returning
-(`form.validate('field_1') => boolean | Promise<boolean>`).
-Each validate function is run on specific event (or all of them if `'all'` is passed).
-Validation event is taken in this order `rule.eventName || validation.eventName || options.validationEventName`.
-
-Detailed field validation configuration is defined with `Rule` objects in `rules` array.
-
-`Rule.message` will go in `FieldMessage.message` as validation state result if `Rule.validate` failed (returns false)
-or if succeded and `Rule.typeIfPassed` provided.
-
-`Rule.type` will go in `FieldMessage.type` if `Rule.validate` failed (returns false).
-
-`Rule.typeIfPassed` should be provided if state message should exist event if `Rule.validate` succeded (returns true), will go in `FieldMessage.type`
-
-`Rule.needMoreValues` controls second argument (formValues) in `Rule.validate` function,
-if `true` - all form values passed,
-if fields array - object only with these fields passed.
-Turned off by default because of potentially rare usage and slight overhead on use.
-It is better to provide fields array if only some field values are needed for validation.
-Providing it means that field validation depends on other field values,
-but for now fields validation dependencies are not implemented,
-so if related fields values change, this rule validate will not be triggered automatically.
-
-`Rule.validate` - function runs on field validation if validation event matches occurred event.
-
-`Rule.eventName` - event on which rule validation will run, overrides `validation.eventName` which overrides `options.validationEventName`
+---
 
 ## Properties
 
@@ -239,6 +260,8 @@ Removes form instance from internal store.
 Returns `true` if internal store still had this form instance.
 
 ---
+
+## FieldState
 
 ### `clearFieldState(field)`
 
@@ -309,6 +332,8 @@ Validation messages are kept intact.
 
 ---
 
+## Values
+
 ### `getValue(field)`
 
 Gets field value.
@@ -359,6 +384,8 @@ Other properties will be considered `onChangeOptions` and passed to event listen
 
 ---
 
+## DOM
+
 ### `registerField(field, element)`
 
 Saves element(s) to internal store and adds event listeners to them.
@@ -393,6 +420,73 @@ Increments `blurred` state and triggers `onBlur` validation.
 
 ---
 
+## FieldValidation
+
+Schema:
+
+```js
+{
+  required: boolean | string | Rule,
+  requiredValidate: (value) => boolean | Promise<boolean>,
+  eventName: 'onTouch' | 'onChange' | 'onBlur' | 'all',
+  rules: [
+    {
+      message: string,
+      type: 'error' | 'warning' | 'success' | 'info',
+      typeIfPassed: 'error' | 'warning' | 'success' | 'info',
+      needMoreValues: boolean | field[],
+      validate: (value, formValues) => boolean | Promise<boolean>,
+      eventName: 'onTouch' | 'onChange' | 'onBlur' | 'all',
+    },
+    Rule,
+    Rule,
+    ...
+  ]
+}
+```
+
+Every parameter is optional.
+
+`required` is separate validation because the most used one and can have a special ui meaning as asterisk in label.
+Usually used as boolean flag.
+It has its default simple validate function instance wide,
+but can be rewritten with `options.requiredValidate` or validation object `requiredValidate`.
+Required message is provided instance wide as `options.requiredMessage` or as a string value of `required` validation parameter.
+For detailed `required` configuration - `Rule` object can be passed as `required` validation parameter.
+
+Validation results in field state messages change
+(`form.getFieldState('field_1').messages = [{ message, type }, ...]`)
+and boolean flag returning
+(`form.validate('field_1') => boolean | Promise<boolean>`).
+Each validate function is run on specific event (or all of them if `'all'` is passed).
+Validation event is taken in this order `rule.eventName || validation.eventName || options.validationEventName`.
+
+Detailed field validation configuration is defined with `Rule` objects in `rules` array.
+
+`Rule.message` will go in `FieldMessage.message` as validation state result if `Rule.validate` failed (returns false)
+or if succeded and `Rule.typeIfPassed` provided.
+
+`Rule.type` will go in `FieldMessage.type` if `Rule.validate` failed (returns false).
+
+`Rule.typeIfPassed` should be provided if state message should exist event if `Rule.validate` succeded (returns true), will go in `FieldMessage.type`
+
+`Rule.needMoreValues` controls second argument (formValues) in `Rule.validate` function,
+if `true` - all form values passed,
+if fields array - object only with these fields passed.
+Turned off by default because of potentially rare usage and slight overhead on use.
+It is better to provide fields array if only some field values are needed for validation.
+Providing it means that field validation depends on other field values,
+but for now fields validation dependencies are not implemented,
+so if related fields values change, this rule validate will not be triggered automatically.
+
+`Rule.validate` - function runs on field validation if validation event matches occurred event.
+
+`Rule.eventName` - event on which rule validation will run, overrides `validation.eventName` which overrides `options.validationEventName`
+
+---
+
+## Validate
+
 ### `validateField(field, eventName?)`
 
 Triggers field validation for specific event.
@@ -418,6 +512,8 @@ If any validate function throws an error be it sync or async -
 catches error and considers it not passed (as if it returned `false`).
 
 ---
+
+## ValidationSettings
 
 ### `getFieldValidation(field)`
 
