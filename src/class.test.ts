@@ -178,6 +178,7 @@ describe('State', () => {
     blurred: 0,
     error: false,
     warning: false,
+    messages: null,
   };
 
   const changeValues = (form: FormCtrl<TestFormValues>) => {
@@ -208,6 +209,7 @@ describe('State', () => {
     blurred: 1,
     error: false,
     warning: false,
+    messages: null,
   } satisfies FormFieldState;
 
   const prop3StateAfterValuesChange = {
@@ -234,6 +236,7 @@ describe('State', () => {
     blurred: 0,
     error: false,
     warning: false,
+    messages: null,
   } satisfies FormFieldState;
 
   const prop5StateAfterValuesChange = {
@@ -255,15 +258,15 @@ describe('State', () => {
 
     const defaultOptions: FormOptions<TestFormValues> = {
       requiredMessage: 'Required field',
-      requiredValidate: form.getOptions().requiredValidate,
+      requiredValidate: form.options.requiredValidate,
       validationEventName: 'onBlur',
     };
 
-    expect(form.getOptions()).toStrictEqual(defaultOptions);
+    expect(form.options).toStrictEqual(defaultOptions);
 
-    form.setOptions({ validationEventName: 'all' });
-    expect(form.getOptions()).toStrictEqual({ ...defaultOptions, validationEventName: 'all' });
-    form.setOptions(defaultOptions);
+    form.options = { validationEventName: 'all' };
+    expect(form.options).toStrictEqual({ validationEventName: 'all' });
+    form.options = defaultOptions;
   });
 
   test('form state params', () => {
@@ -331,7 +334,7 @@ describe('State', () => {
     form.clearFieldCustomMessages('prop1');
     expect(form.getFieldState('prop1').error).toBe(false);
     expect(form.getFieldState('prop1').warning).toBe(false);
-    expect(form.getFieldState('prop1').messages).toBe(undefined);
+    expect(form.getFieldState('prop1').messages).toBe(null);
     expect(form.hasErrors).toBe(true);
     expect(form.hasWarnings).toBe(false);
 
@@ -343,7 +346,7 @@ describe('State', () => {
     form.clearFieldMessages('prop1');
     expect(form.getFieldState('prop1').error).toBe(false);
     expect(form.getFieldState('prop1').warning).toBe(false);
-    expect(form.getFieldState('prop1').messages).toBe(undefined);
+    expect(form.getFieldState('prop1').messages).toBe(null);
 
     changeValues(form);
 
@@ -376,11 +379,11 @@ describe('State', () => {
     changeValues(form);
 
     form.resetFieldValidation('prop1', { required: true });
-    expect(form.getFieldState('prop1').messages).toBe(undefined);
+    expect(form.getFieldState('prop1').messages).toBe(null);
 
     changeValues(form);
     form.setFieldValidation('prop1', { required: false });
-    expect(form.getFieldState('prop1').messages).toBe(undefined);
+    expect(form.getFieldState('prop1').messages).toBe(null);
 
     form.setFieldValidation('prop1', createComplexValidation().prop1!);
     changeValues(form);
@@ -390,11 +393,11 @@ describe('State', () => {
     expect(form.getFieldState('prop1').messages).toStrictEqual(
       prop1StateAfterValuesChange.messages,
     );
-    expect(form.getFieldState('prop2').messages).toBe(undefined);
+    expect(form.getFieldState('prop2').messages).toBe(null);
     expect(form.getFieldState('prop3').messages).toStrictEqual(
       prop3StateAfterValuesChange.messages,
     );
-    expect(form.getFieldState('prop4').messages).toBe(undefined);
+    expect(form.getFieldState('prop4').messages).toBe(null);
     expect(form.getFieldState('prop5').messages).toStrictEqual(
       prop5StateAfterValuesChange.messages,
     );
@@ -467,7 +470,7 @@ describe('DOM', () => {
   const createInput = (inputType: string, field: FormField) => {
     const inputEl = document.createElement('input');
     inputEl.type = inputType;
-    inputEl.addEventListener('input', (e) => form.handleChange(field, e));
+    inputEl.addEventListener('input', (e) => form.handleInput(field, e));
     inputEl.addEventListener('blur', () => form.handleBlur(field));
     document.body.appendChild(inputEl);
 
@@ -512,6 +515,7 @@ describe('DOM', () => {
       blurred: 1,
       error: false,
       warning: false,
+      messages: null,
     });
     expect(form.getValue(itext.field)).toBe('asdf');
   });
@@ -583,6 +587,7 @@ describe('DOM', () => {
       blurred: 2,
       error: false,
       warning: false,
+      messages: null,
     });
   });
 
@@ -597,6 +602,7 @@ describe('DOM', () => {
       blurred: 1,
       error: false,
       warning: false,
+      messages: null,
     });
   });
 
@@ -613,6 +619,7 @@ describe('DOM', () => {
       blurred: 1,
       error: false,
       warning: false,
+      messages: null,
     });
   });
 });
@@ -639,12 +646,12 @@ describe('Validate', () => {
   test('validate with default setValue validation event onChange', () => {
     const form = createComplexForm('form_validate');
     form.setValue('prop1', 8);
-    expect(form.getFieldState('prop1').messages).toBe(undefined);
+    expect(form.getFieldState('prop1').messages).toBe(null);
   });
 
   test('validate with default handleChange validation event onTouch', () => {
     const form = createComplexForm('form_validate');
-    form.handleChange('prop1', { target: { value: 2 } });
+    form.handleInput('prop1', { target: { value: 2 } });
     expect(form.getFieldState('prop1').messages).toStrictEqual([
       { type: 'error', message: 'msg11' },
       { type: 'warning', message: 'msg12' },
@@ -662,7 +669,7 @@ describe('Validate', () => {
 
     form.setValue('prop2', 'asdfg');
     form.validateField('prop1', 'onBlur');
-    expect(form.getFieldState('prop1').messages).toBe(undefined);
+    expect(form.getFieldState('prop1').messages).toBe(null);
   });
 
   test('promisified validate', async () => {
@@ -701,10 +708,10 @@ describe('Validation settings', () => {
 
   test('field validation: clear, set', () => {
     form.setValue('prop1', 1, { byUser: true });
-    expect(form.getFieldState('prop1').messages).not.toBe(undefined);
+    expect(form.getFieldState('prop1').messages).not.toBe(null);
     expect(form.clearFieldValidation('prop1')).toBe(true);
     expect(form.getFieldValidation('prop1')).toBe(undefined);
-    expect(form.getFieldState('prop1').messages).toBe(undefined);
+    expect(form.getFieldState('prop1').messages).toBe(null);
 
     expect(
       form.setFieldValidation('prop1', { eventName: 'onTouch', required: true }),
@@ -714,9 +721,9 @@ describe('Validation settings', () => {
       required: true,
     });
     form.setValue('prop1', 0, { byUser: true });
-    expect(form.getFieldState('prop1').messages).not.toBe(undefined);
+    expect(form.getFieldState('prop1').messages).not.toBe(null);
     form.setFieldValidation('prop1', { required: true });
-    expect(form.getFieldState('prop1').messages).toBe(undefined);
+    expect(form.getFieldState('prop1').messages).toBe(null);
     expect(form.clearFieldValidation('prop1')).toBe(true);
   });
 

@@ -113,16 +113,49 @@ export type FormValidation<FV extends object = FormValues> = {
   [F in FormField<FV>]?: FormFieldValidation<FV, F>;
 };
 
-export interface FormOptions<FV extends object = FormValues> {
+export type OnChangeOptions<O> = Omit<O, keyof FormValuesSetterOptions>;
+
+export interface FormOptions<
+  FV extends object = FormValues,
+  O extends FormValuesSetterOptions = FormValuesSetterOptions,
+> {
   validationEventName?: FormValidationEventName;
   requiredValidate?: FormFieldRequiredValidate<FV>;
   requiredMessage?: string;
+  defaultValues?: FV;
+  onValueChange?: <F extends FormField<FV> = FormField<FV>>(
+    field: F,
+    value: FV[F],
+    prevValue: FV[F],
+    onChangeOptions?: OnChangeOptions<O>,
+  ) => void;
+  onMessagesChange?: (
+    field: FormField<FV>,
+    messages: FormFieldMessage[] | null,
+    prevMessages: FormFieldMessage[] | null,
+    onChangeOptions?: OnChangeOptions<O>,
+  ) => void;
+  onErrorChange?: (
+    field: FormField<FV>,
+    error: boolean,
+    prevError: boolean,
+    onChangeOptions?: OnChangeOptions<O>,
+  ) => void;
+  onWarningChange?: (
+    field: FormField<FV>,
+    warning: boolean,
+    prevWarning: boolean,
+    onChangeOptions?: OnChangeOptions<O>,
+  ) => void;
 }
 
-export interface FormConstructorOptions<FV extends object = FormValues>
-  extends Partial<FormOptions<FV>> {
+export interface FormConstructorOptions<
+  FV extends object = FormValues,
+  O extends FormValuesSetterOptions = FormValuesSetterOptions,
+> extends Partial<FormOptions<FV, O>> {
   validation?: FormValidation<FV>;
   values?: FV;
+  register?: Partial<Record<FormField<FV>, HTMLElement | HTMLElement[]>>;
 }
 
 export interface FormFieldState {
@@ -161,15 +194,15 @@ export interface FormFieldState {
    *
    * 3. custom messages in added order
    */
-  messages?: FormFieldMessage[];
+  messages: FormFieldMessage[] | null;
 }
 
 export interface FormFieldInternalState {
-  requiredMessage?: FormFieldMessage;
-  rulesMessages?: (FormFieldMessage | undefined)[];
-  customMessages?: FormFieldMessage[];
-  errorOverride?: boolean;
-  warningOverride?: boolean;
+  requiredMessage: FormFieldMessage | null;
+  rulesMessages: (FormFieldMessage | undefined)[] | null;
+  customMessages: FormFieldMessage[] | null;
+  errorOverride: boolean | null;
+  warningOverride: boolean | null;
 }
 
 export interface FormValuesSetterOptions {

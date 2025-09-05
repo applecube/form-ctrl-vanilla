@@ -14,7 +14,9 @@ import type {
   FormValidationEventName,
   FormFieldRequiredValidate,
   FormFieldInternalState,
+  OnChangeOptions,
 } from './types.js';
+import { getElementsValue, getElementValue, setElementsValue, setElementValue } from './dom.js';
 
 const formCtrlHolder = new Map<FormId, FormCtrl<any, any>>();
 
@@ -27,44 +29,38 @@ export const FORM_CTRL_DEFAULTS: {
   requiredValidate: (v) => v !== undefined && v !== null && v !== '' && v !== 0,
 };
 
-type RerenderOptions<O> = Omit<O, keyof FormValuesSetterOptions>;
-
 /**
- * Main class for form states, values, validation, rerenders and processing those things.
- *
- * Each form is new instance, saved in internal store by id.
- *
- * Rerender logic is empty by default and if needed should be assigned in subclass with `_rerenderField` method.
+ * Fields values, states, validation, DOM elements holder.
+ * Most of logic happens here.
  */
 export class FormCtrl<
   FV extends object = FormValues,
   O extends FormValuesSetterOptions = FormValuesSetterOptions,
 > {
   readonly id: FormId;
-  protected readonly _options: FormOptions<FV>;
+  options: FormOptions<FV, O>;
   protected readonly _valuesMap: Map<FormField<FV>, any>;
   protected readonly _stateMap: Map<FormField<FV>, FormFieldState | undefined>;
   protected readonly _internalStateMap: Map<FormField<FV>, FormFieldInternalState | undefined>;
   protected readonly _validationMap: Map<FormField<FV>, FormFieldValidation<FV> | undefined>;
+  protected readonly _elementMap: Map<FormField<FV>, HTMLElement | HTMLElement[] | undefined>;
 
   // region Constructor
 
-  constructor(formId: FormId, options: FormConstructorOptions<FV> = {}) {
-    const { validationEventName, requiredMessage, requiredValidate, validation, values } = options;
+  constructor(formId: FormId, constructorOptions: FormConstructorOptions<FV, O> = {}) {
+    const { validation, values, register, ...options } = constructorOptions;
     this.id = formId;
-    this._options = {
-      validationEventName,
-      requiredMessage,
-      requiredValidate,
-    };
+    this.options = options;
 
     this._valuesMap = new Map();
     this._stateMap = new Map();
     this._internalStateMap = new Map();
     this._validationMap = new Map();
+    this._elementMap = new Map();
 
-    if (validation) this._setValidation(validation);
-    if (values) this._setValues(values);
+    if (register) this.register(register);
+    if (validation) this.setValidation(validation);
+    if (values || options.defaultValues) this._setValues({ ...options.defaultValues, ...values });
 
     formCtrlHolder.set(formId, this);
   }
@@ -94,42 +90,7 @@ export class FormCtrl<
     formCtrlHolder.clear();
   }
 
-  // region FormState
-  /**
-   * Removes form instance from internal store.
-   */
-  destroy(): boolean {
-    return formCtrlHolder.delete(this.id);
-  }
-
-  /**
-   * Clears all field states.
-   */
-  clearState(rerenderOptions?: RerenderOptions<O>): void {
-    this._rerenderFields(this._clearState(), rerenderOptions);
-  }
-
-  /**
-   * Clears all fields states (messages, error, warning, etc) and values.
-   * Validation settings are not changed.
-   * To clear validation settings use `clearValidation`.
-   */
-  clear(rerenderOptions?: RerenderOptions<O>): void {
-    this._rerenderFields(new Set([...this._clearState(), ...this._clearValues()]), rerenderOptions);
-  }
-
-  /**
-   * Clears all fields states (messages, error, warning, etc) and values.
-   * Overrides field values with provided ones.
-   * Validation settings are not changed.
-   * To reset validation settings use `resetValidation`.
-   */
-  reset(values: FV, rerenderOptions?: RerenderOptions<O>): void {
-    this._rerenderFields(
-      new Set([...this._clearState(), ...this._resetValues(values)]),
-      rerenderOptions,
-    );
-  }
+  // region Form
 
   /**
    * Number of times form values have been changed by user.
@@ -185,78 +146,150 @@ export class FormCtrl<
   }
 
   /**
-   * Returns form options.
-   * Should not be changed directly.
-   * Use `setOptions` to change options.
+   * Clears all fields states (messages, error, warning, touched, changed, blurred).
+   * Clears values.
+   *
+   * Validation settings are not changed.
+   * To clear validation settings use `clearValidation`.
    */
-  getOptions(): FormOptions<FV> {
-    return this._options;
+  clear(onChangeOptions?: OnChangeOptions<O>): void {
+    this.clearState(onChangeOptions);
+    this._clearValues(onChangeOptions);
   }
 
   /**
-   * Overrides provided form options.
-   * Returns full form options.
+   * Clears all fields states (messages, error, warning, touched, changed, blurred).
+   * Overrides field values with provided `newValues` or `defaultValues`.
+   *
+   * Validation settings are not changed.
+   * To clear or reset validation settings use `clearValidation` or `resetValidation`.
    */
-  setOptions(formOptions: Partial<FormOptions<FV>>): FormOptions<FV> {
-    return Object.assign(this._options, formOptions);
+  reset(newValues?: FV, onChangeOptions?: OnChangeOptions<O>): void {
+    this.clearState(onChangeOptions);
+    this._resetValues(newValues, onChangeOptions);
   }
 
   /**
-   * Clears all field states. Internal without rerender.
+   * Removes form instance from internal store.
    */
-  protected _clearState(): FormField<FV>[] {
-    const fields = [...this._stateMap.keys()];
-    this._stateMap.clear();
-    this._internalStateMap.clear();
-
-    return fields;
+  destroy(): boolean {
+    return formCtrlHolder.delete(this.id);
   }
 
-  // region FieldRerender
+  // region OnChange
 
-  /**
-   * Loops through `fields` or all fields if `fields` is not passed and calls `_rerenderField` for each field.
-   * Is used when fields value or state changed.
-   */
-  protected _rerenderFields(
-    fields?: Iterable<FormField<FV>>,
-    rerenderOptions?: RerenderOptions<O>,
+  protected _onValueChange<F extends FormField<FV> = FormField<FV>>(
+    field: F,
+    value: FV[F],
+    prevValue: FV[F],
+    onChangeOptions?: OnChangeOptions<O>,
   ): void {
-    for (const field of fields || new Set([...this._stateMap.keys(), ...this._valuesMap.keys()])) {
-      this._rerenderField(field, rerenderOptions);
-    }
+    if (Object.is(value, prevValue)) return;
+    this.options.onValueChange?.(field, value, prevValue, onChangeOptions);
+  }
+
+  protected _onMessagesChange(
+    field: FormField<FV>,
+    messages: FormFieldMessage[] | null,
+    prevMessages: FormFieldMessage[] | null,
+    onChangeOptions?: OnChangeOptions<O>,
+  ): void {
+    if (Object.is(messages, prevMessages)) return;
+    this.options.onMessagesChange?.(field, messages, prevMessages, onChangeOptions);
+  }
+
+  protected _onErrorChange(
+    field: FormField<FV>,
+    error: boolean,
+    prevError: boolean,
+    onChangeOptions?: OnChangeOptions<O>,
+  ): void {
+    if (Object.is(error, prevError)) return;
+    this.options.onErrorChange?.(field, error, prevError, onChangeOptions);
+  }
+
+  protected _onWarningChange(
+    field: FormField<FV>,
+    warning: boolean,
+    prevWarning: boolean,
+    onChangeOptions?: OnChangeOptions<O>,
+  ): void {
+    if (Object.is(warning, prevWarning)) return;
+    this.options.onWarningChange?.(field, warning, prevWarning, onChangeOptions);
   }
 
   /**
-   * This is used after value or state changed.
-   * Should be overriden in subclass for reactivity.
+   * !! This is not triggered for every state change.
+   * It is only for situational convenience.
+   *
+   * There is intentionally no state change handler because:
+   * - it will be triggered very often, because of `touched` and `changed` counters
+   * - creating additional state object clone for prevState arg
+   * - most likely is not needed since there are messages, error, warning change handlers
    */
-  // eslint-disable-next-line
-  protected _rerenderField(field: FormField<FV>, rerenderOptions?: RerenderOptions<O>): void {}
 
   // region FieldState
+
+  /**
+   * Gets field state.
+   * Should not be changed directly.
+   */
+  getFieldState(field: FormField<FV>): FormFieldState {
+    return this._ensureFieldState(field);
+  }
 
   /**
    * Clears field state.
    * Messages, error, warning are dropped including custom messages and forced error / warning.
    * Returns `true` if there was a state for passed field.
    */
-  clearFieldState(field: FormField<FV>, rerenderOptions?: RerenderOptions<O>): boolean {
-    const deleted = this._clearFieldState(field);
-    this._rerenderField(field, rerenderOptions);
+  clearFieldState(field: FormField<FV>, onChangeOptions?: OnChangeOptions<O>): boolean {
+    const prevFieldState = this._stateMap.get(field);
+
+    this._internalStateMap.delete(field);
+    const deleted = this._stateMap.delete(field);
+
+    if (prevFieldState) {
+      const { messages: prevMessages, error: prevError, warning: prevWarning } = prevFieldState;
+      const { messages, error, warning } = this._getEmptyFieldState();
+      this._onMessagesChange(field, messages, prevMessages, onChangeOptions);
+      this._onErrorChange(field, error, prevError, onChangeOptions);
+      this._onWarningChange(field, warning, prevWarning, onChangeOptions);
+    }
+
     return deleted;
   }
 
   /**
-   * Gets field state.
-   * Creates empty one if none found:
-   *
-   * `{ touched: 0, changed: 0, blurred: 0, error: false, warning: false }`
-   *
-   * Should not be changed directly.
+   * Clears all field states.
    */
-  getFieldState(field: FormField<FV>): FormFieldState {
-    return this._ensureFieldState(field);
+  clearState(onChangeOptions?: OnChangeOptions<O>): void {
+    const {
+      messages: emptyMessages,
+      error: emptyError,
+      warning: emptyWarning,
+    } = this._getEmptyFieldState();
+
+    for (const [field, fieldState] of this._stateMap) {
+      if (!fieldState) continue;
+      const { messages, error, warning } = fieldState;
+      this._onMessagesChange(field, emptyMessages, messages, onChangeOptions);
+      this._onErrorChange(field, emptyError, error, onChangeOptions);
+      this._onWarningChange(field, emptyWarning, warning, onChangeOptions);
+    }
+
+    this._stateMap.clear();
+    this._internalStateMap.clear();
+  }
+
+  incrementChanged(field: FormField<FV>, byUser?: boolean): void {
+    const fieldState = this._ensureFieldState(field);
+    fieldState.changed++;
+    if (byUser) fieldState.touched++;
+  }
+
+  incrementBlurred(field: FormField<FV>): void {
+    this._ensureFieldState(field).blurred++;
   }
 
   /**
@@ -267,11 +300,13 @@ export class FormCtrl<
   forceFieldError(
     field: FormField<FV>,
     error: boolean,
-    rerenderOptions?: RerenderOptions<O>,
+    onChangeOptions?: OnChangeOptions<O>,
   ): void {
     this._ensureInternalFieldState(field).errorOverride = error;
-    this._ensureFieldState(field).error = error;
-    this._rerenderField(field, rerenderOptions);
+    const fieldState = this._ensureFieldState(field);
+    const prevError = fieldState.error;
+    fieldState.error = error;
+    this._onErrorChange(field, error, prevError, onChangeOptions);
   }
 
   /**
@@ -282,54 +317,67 @@ export class FormCtrl<
   forceFieldWarning(
     field: FormField<FV>,
     warning: boolean,
-    rerenderOptions?: RerenderOptions<O>,
+    onChangeOptions?: OnChangeOptions<O>,
   ): void {
     this._ensureInternalFieldState(field).warningOverride = warning;
-    this._ensureFieldState(field).warning = warning;
-    this._rerenderField(field, rerenderOptions);
+    const fieldState = this._ensureFieldState(field);
+    const prevWarning = fieldState.warning;
+    fieldState.warning = warning;
+    this._onWarningChange(field, warning, prevWarning, onChangeOptions);
   }
 
   /**
    * Clears permanent error override and recalculates error based on existing messages.
    */
-  unforceFieldError(field: FormField<FV>, rerenderOptions?: RerenderOptions<O>): void {
-    delete this._ensureInternalFieldState(field).errorOverride;
-    this._updateFieldMessages(field, 'onlyError');
-    this._rerenderField(field, rerenderOptions);
+  unforceFieldError(field: FormField<FV>, onChangeOptions?: OnChangeOptions<O>): void {
+    const internalFieldState = this._internalStateMap.get(field);
+    if (!internalFieldState) return;
+    internalFieldState.errorOverride = null;
+    this._updateFieldMessages(field, onChangeOptions, 'onlyError');
   }
 
   /**
    * Clears permanent warning override and recalculates warning based on existing messages.
    */
-  unforceFieldWarning(field: FormField<FV>, rerenderOptions?: RerenderOptions<O>): void {
-    delete this._ensureInternalFieldState(field).warningOverride;
-    this._updateFieldMessages(field, 'onlyWarning');
-    this._rerenderField(field, rerenderOptions);
+  unforceFieldWarning(field: FormField<FV>, onChangeOptions?: OnChangeOptions<O>): void {
+    const internalFieldState = this._internalStateMap.get(field);
+    if (!internalFieldState) return;
+    internalFieldState.warningOverride = null;
+    this._updateFieldMessages(field, onChangeOptions, 'onlyWarning');
   }
 
   /**
    * Clears all field messages (validation and custom), error, warning.
    */
-  clearFieldMessages(field: FormField<FV>, rerenderOptions?: RerenderOptions<O>): void {
-    this._clearFieldMessages(field);
-    this._rerenderField(field, rerenderOptions);
+  clearFieldMessages(field: FormField<FV>, onChangeOptions?: OnChangeOptions<O>): void {
+    const internalFieldState = this._internalStateMap.get(field);
+    if (!internalFieldState) return;
+    internalFieldState.requiredMessage = null;
+    internalFieldState.rulesMessages = null;
+    internalFieldState.customMessages = null;
+    this._updateFieldMessages(field, onChangeOptions);
   }
 
   /**
    * Clears validation field messages (that can exist only as result of field validation).
    * Custom field messages are kept intact.
    */
-  clearFieldValidationMessages(field: FormField<FV>, rerenderOptions?: RerenderOptions<O>): void {
-    this._clearFieldValidationMessages(field);
-    this._rerenderField(field, rerenderOptions);
+  clearFieldValidationMessages(field: FormField<FV>, onChangeOptions?: OnChangeOptions<O>): void {
+    const internalFieldState = this._internalStateMap.get(field);
+    if (!internalFieldState) return;
+    internalFieldState.requiredMessage = null;
+    internalFieldState.rulesMessages = null;
+    this._updateFieldMessages(field, onChangeOptions);
   }
 
   /**
    * Clears custom field messages. Validation messages are kept intact.
    */
-  clearFieldCustomMessages(field: FormField<FV>, rerenderOptions?: RerenderOptions<O>): void {
-    this._clearFieldCustomMessages(field);
-    this._rerenderField(field, rerenderOptions);
+  clearFieldCustomMessages(field: FormField<FV>, onChangeOptions?: OnChangeOptions<O>): void {
+    const internalFieldState = this._internalStateMap.get(field);
+    if (!internalFieldState) return;
+    internalFieldState.customMessages = null;
+    this._updateFieldMessages(field, onChangeOptions);
   }
 
   /**
@@ -339,10 +387,12 @@ export class FormCtrl<
   addFieldCustomMessages(
     field: FormField<FV>,
     messages: FormFieldMessage[],
-    rerenderOptions?: RerenderOptions<O>,
+    onChangeOptions?: OnChangeOptions<O>,
   ): void {
-    this._addFieldCustomMessages(field, messages);
-    this._rerenderField(field, rerenderOptions);
+    const internalFieldState = this._ensureInternalFieldState(field);
+    internalFieldState.customMessages = internalFieldState.customMessages || [];
+    internalFieldState.customMessages.push(...messages);
+    this._updateFieldMessages(field, onChangeOptions);
   }
 
   /**
@@ -351,110 +401,96 @@ export class FormCtrl<
   resetFieldCustomMessages(
     field: FormField<FV>,
     messages: FormFieldMessage[],
-    rerenderOptions?: RerenderOptions<O>,
+    onChangeOptions?: OnChangeOptions<O>,
   ): void {
-    this._resetFieldCustomMessages(field, messages);
-    this._rerenderField(field, rerenderOptions);
-  }
-
-  /**
-   * Clears all field messages (validation and custom), error, warning.
-   * Internal without rerender.
-   */
-  protected _clearFieldMessages(field: FormField<FV>): void {
-    const internalFieldState = this._ensureInternalFieldState(field);
-    delete internalFieldState.requiredMessage;
-    delete internalFieldState.rulesMessages;
-    delete internalFieldState.customMessages;
-    this._updateFieldMessages(field);
-  }
-
-  /**
-   * Clears validation field messages (that can exist only as result of field validation).
-   * Custom field messages are kept intact.
-   * Internal without rerender.
-   */
-  protected _clearFieldValidationMessages(field: FormField<FV>): void {
-    const internalFieldState = this._ensureInternalFieldState(field);
-    delete internalFieldState.requiredMessage;
-    delete internalFieldState.rulesMessages;
-    this._updateFieldMessages(field);
-  }
-
-  /**
-   * Clears custom field messages. Validation messages are kept intact.
-   * Internal without rerender.
-   */
-  protected _clearFieldCustomMessages(field: FormField<FV>): void {
-    const internalFieldState = this._ensureInternalFieldState(field);
-    delete internalFieldState.customMessages;
-    this._updateFieldMessages(field);
-  }
-
-  /**
-   * Adds custom field messages. Previous field messages are kept intact.
-   * These are separate from potential validation messages.
-   * Internal without rerender.
-   */
-  protected _addFieldCustomMessages(field: FormField<FV>, messages: FormFieldMessage[]): void {
-    const internalFieldState = this._ensureInternalFieldState(field);
-    internalFieldState.customMessages = internalFieldState.customMessages || [];
-    internalFieldState.customMessages.push(...messages);
-    this._updateFieldMessages(field);
-  }
-
-  /**
-   * Clears and adds new custom field messages. Validation messages are kept intact.
-   * Internal without rerender.
-   */
-  protected _resetFieldCustomMessages(field: FormField<FV>, messages: FormFieldMessage[]): void {
     this._ensureInternalFieldState(field).customMessages = [...messages];
-    this._updateFieldMessages(field);
+    this._updateFieldMessages(field, onChangeOptions);
   }
 
   /**
-   * Gets field state.
-   * Creates empty one if none found:
-   *
-   * `{ touched: 0, changed: 0, blurred: 0, error: false, warning: false }`
+   * Clears all messages for specified fields, or for all fields if `fields` is not passed.
+   */
+  clearMessages(fields?: Iterable<FormField<FV>>, onChangeOptions?: OnChangeOptions<O>): void {
+    for (const field of fields || this._internalStateMap.keys()) {
+      this.clearFieldMessages(field, onChangeOptions);
+    }
+  }
+
+  /**
+   * Clears validation messages for specified fields, or for all fields if `fields` is not passed.
+   */
+  clearValidationMessages(
+    fields?: Iterable<FormField<FV>>,
+    onChangeOptions?: OnChangeOptions<O>,
+  ): void {
+    for (const field of fields || this._internalStateMap.keys()) {
+      this.clearFieldValidationMessages(field, onChangeOptions);
+    }
+  }
+
+  /**
+   * Clears custom messages for specified fields, or for all fields if `fields` is not passed.
+   */
+  clearCustomMessages(
+    fields?: Iterable<FormField<FV>>,
+    onChangeOptions?: OnChangeOptions<O>,
+  ): void {
+    for (const field of fields || this._internalStateMap.keys()) {
+      this.clearFieldCustomMessages(field, onChangeOptions);
+    }
+  }
+
+  /**
+   * Gets new empty `fieldState`
+   */
+  protected _getEmptyFieldState(): FormFieldState {
+    // null for consistent object structure
+    return {
+      touched: 0,
+      changed: 0,
+      blurred: 0,
+      error: false,
+      warning: false,
+      messages: null,
+    };
+  }
+
+  /**
+   * Gets new empty `internalFieldState`
+   */
+  protected _getEmptyInternalFieldState(): FormFieldInternalState {
+    // nulls for consistent object structure
+    return {
+      requiredMessage: null,
+      rulesMessages: null,
+      customMessages: null,
+      errorOverride: null,
+      warningOverride: null,
+    };
+  }
+
+  /**
+   * Gets field state. Creates empty one if none found.
    */
   protected _ensureFieldState(field: FormField<FV>): FormFieldState {
     let fieldState = this._stateMap.get(field);
     if (!fieldState) {
-      fieldState = {
-        touched: 0,
-        changed: 0,
-        blurred: 0,
-        error: false,
-        warning: false,
-      };
+      fieldState = this._getEmptyFieldState();
       this._stateMap.set(field, fieldState);
     }
     return fieldState;
   }
 
   /**
-   * Gets internal field state.
-   * Creates empty one if none found: `{}`
+   * Gets internal field state. Creates empty one if none found.
    */
   protected _ensureInternalFieldState(field: FormField<FV>): FormFieldInternalState {
     let internalFieldState = this._internalStateMap.get(field);
     if (!internalFieldState) {
-      internalFieldState = {};
+      internalFieldState = this._getEmptyInternalFieldState();
       this._internalStateMap.set(field, internalFieldState);
     }
     return internalFieldState;
-  }
-
-  /**
-   * Clears field state.
-   * Messages, error, warning are dropped including custom messages and forced error / warning.
-   * Returns `true` if there was a state for passed field.
-   * Internal without rerender.
-   */
-  protected _clearFieldState(field: FormField<FV>): boolean {
-    this._internalStateMap.delete(field);
-    return this._stateMap.delete(field);
   }
 
   /**
@@ -464,14 +500,22 @@ export class FormCtrl<
    * Also sets `fieldState.error` and `fieldState.warning`
    * based on `errorOverride`, `warningOverride` and all messages `type`.
    *
+   * Triggers `onMessagesChange`, `onErrorChange`, `onWarningChange` after everything is set.
+   *
    * Pass `only` to loop only for `error` or `warning`.
    */
-  protected _updateFieldMessages(field: FormField<FV>, only?: 'onlyError' | 'onlyWarning'): void {
+  protected _updateFieldMessages(
+    field: FormField<FV>,
+    onChangeOptions?: OnChangeOptions<O>,
+    only?: 'onlyError' | 'onlyWarning',
+  ): void {
     const fieldState = this._ensureFieldState(field);
     const { requiredMessage, rulesMessages, customMessages, errorOverride, warningOverride } =
       this._ensureInternalFieldState(field);
 
-    if (!only) delete fieldState.messages;
+    const { messages: prevMessages, error: prevError, warning: prevWarning } = fieldState;
+
+    if (!only) fieldState.messages = null;
     if (only !== 'onlyWarning') fieldState.error = errorOverride ?? false;
     if (only !== 'onlyError') fieldState.warning = warningOverride ?? false;
 
@@ -499,6 +543,12 @@ export class FormCtrl<
         if (message) processInternalMessage(message);
       }
     }
+
+    const { messages, error, warning } = fieldState;
+
+    this._onMessagesChange(field, messages, prevMessages, onChangeOptions);
+    this._onErrorChange(field, error, prevError, onChangeOptions);
+    this._onWarningChange(field, warning, prevWarning, onChangeOptions);
   }
 
   // region Values
@@ -538,8 +588,9 @@ export class FormCtrl<
    * Provide `options` to control things happening other than setting value.
    */
   setValue<F extends FormField<FV> = FormField<FV>>(field: F, value: FV[F], options?: O): void {
-    this._valuesMap.set(field, value);
-    this._onAfterValueChange(field, options);
+    const onChangeOptions = this._extractOnChangeOptions(options);
+    this._setValue(field, value, onChangeOptions);
+    this._processValueChange(field, options);
   }
 
   /**
@@ -547,8 +598,9 @@ export class FormCtrl<
    * Provide `options` to control things happening other than setting values.
    */
   setValues(values: Partial<FV>, options?: O): void {
-    this._setValues(values);
-    this._onAfterValuesChange(Object.keys(values) as FormField<FV>[], options);
+    const onChangeOptions = this._extractOnChangeOptions(options);
+    const fields = this._setValues(values, onChangeOptions);
+    this._processValuesChange(fields, options);
   }
 
   /**
@@ -556,140 +608,286 @@ export class FormCtrl<
    * Provide `options` to control things happening other than clearing values.
    */
   clearValues(options?: O): void {
-    this._onAfterValuesChange(this._clearValues(), options);
+    const onChangeOptions = this._extractOnChangeOptions(options);
+    const fields = this._clearValues(onChangeOptions);
+    this._processValuesChange(fields, options);
   }
 
   /**
-   * Clears all previous fields values and sets provided ones.
-   * Validation, state change, rerender happen for previous and new fields combined.
-   * If field was there and provided again above things happen to it once.
+   * Clears old values and sets provided `newValues` or `defaultValues`.
+   * Validation, state change, onValueChange happen for previous and new fields combined.
+   * If field was there and provided again these things happen to it once.
    */
-  resetValues(values: FV, options?: O): void {
-    this._onAfterValuesChange(this._resetValues(values), options);
+  resetValues(newValues?: FV, options?: O): void {
+    const onChangeOptions = this._extractOnChangeOptions(options);
+    const fields = this._resetValues(newValues, onChangeOptions);
+    this._processValuesChange(fields, options);
+  }
+
+  protected _extractOnChangeOptions(options?: O): OnChangeOptions<O> | undefined {
+    if (!options) return;
+
+    // eslint-disable-next-line
+    const { byUser, skipChangeUpdate, skipValidation, ...onChangeOptions } = options;
+    return onChangeOptions;
   }
 
   /**
-   * Internal simple fields values setter. Without validation, state change, rerender.
+   * Sets value and triggers onValueChange.
+   * Without validation and state change.
    */
-  protected _setValues(values: Partial<FV>): void {
-    for (const field in values) {
-      this._valuesMap.set(field, values[field]);
+  protected _setValue<F extends FormField<FV> = FormField<FV>>(
+    field: F,
+    value: FV[F],
+    onChangeOptions?: OnChangeOptions<O>,
+  ): void {
+    const prevValue = this._valuesMap.get(field);
+    this._valuesMap.set(field, value);
+    this._setValueToDOM(field, value);
+    this._onValueChange(field, value, prevValue, onChangeOptions);
+  }
+
+  /**
+   * Sets values and triggers onValueChange after all values set.
+   * Without validation and state change.
+   */
+  protected _setValues(
+    newValues: Partial<FV>,
+    onChangeOptions?: OnChangeOptions<O>,
+  ): FormField<FV>[] {
+    const valuesMap = this._valuesMap;
+    const fields: FormField<FV>[] = [];
+    const prevValues: Partial<FV> = {};
+
+    // set values and collect fields and previous values
+    for (const field in newValues) {
+      fields.push(field);
+      prevValues[field] = valuesMap.get(field);
+
+      const value = newValues[field] as FV[keyof FV];
+      valuesMap.set(field, value);
+      this._setValueToDOM(field, value);
     }
-  }
 
-  /**
-   * Clears fields values. Returns fields that had values.
-   * Without validation, state change, rerender.
-   */
-  protected _clearValues(): FormField<FV>[] {
-    const fields = [...this._valuesMap.keys()];
-    this._valuesMap.clear();
+    // trigger onValueChange after all values are set
+    for (const field of fields) {
+      this._onValueChange(
+        field,
+        newValues[field] as FV[keyof FV],
+        prevValues[field] as FV[keyof FV],
+        onChangeOptions,
+      );
+    }
+
     return fields;
   }
 
   /**
-   * Clears fields values and sets new ones.
-   * Returns unique fields Set that were cleared or added.
-   * Without validation, state change, rerender.
+   * Clears values and triggers onValueChange after everything is cleared.
+   * Returns fields that had values.
+   * Without validation and state change.
    */
-  protected _resetValues(values: FV): Set<FormField<FV>> {
-    const fieldSet = new Set(this._clearValues());
-
-    for (const field in values) {
-      this._valuesMap.set(field, values[field]);
-      fieldSet.add(field);
+  protected _clearValues(onChangeOptions?: OnChangeOptions<O>): Iterable<FormField<FV>> {
+    const prevValuesMap = new Map(this._valuesMap);
+    this._valuesMap.clear();
+    for (const [field, value] of prevValuesMap) {
+      this._onValueChange(field, undefined as any, value, onChangeOptions);
     }
-
-    return fieldSet;
+    return prevValuesMap.keys();
   }
 
   /**
-   * Is triggered after field value changes.
-   * Changes state, triggeres validation and rerender.
+   * Clears old values and sets provided `newValues` or `defaultValues`.
+   * Triggers onValueChange after everything is set.
+   * Returns unique fields (without potential duplicates).
+   * Without validation and state change.
    */
-  protected _onAfterValueChange(field: FormField<FV>, options?: O): void {
-    const { byUser, skipChangeUpdate, skipValidation, ...rerenderOptions } = (options || {}) as O;
-
-    if (!skipChangeUpdate) {
-      const fieldState = this._ensureFieldState(field);
-      fieldState.changed++;
-      if (byUser) fieldState.touched++;
+  protected _resetValues(
+    newValues: FV | undefined = this.options.defaultValues,
+    onChangeOptions?: OnChangeOptions<O>,
+  ): Iterable<FormField<FV>> {
+    if (!newValues) return this._clearValues(onChangeOptions);
+    // reference for faster access
+    const valuesMap = this._valuesMap;
+    // save copy for prev values reference
+    const prevValuesMap = new Map(valuesMap);
+    // clear old and set new
+    valuesMap.clear();
+    for (const field in newValues) {
+      valuesMap.set(field, newValues[field]);
     }
 
-    if (!skipValidation) {
-      const passedMaybePromise = this._validateField(field, byUser ? 'onTouch' : 'onChange');
-      if (passedMaybePromise instanceof Promise) {
-        passedMaybePromise.then(() => this._rerenderField(field, rerenderOptions));
-      }
+    // trigger onValueChange for all fields only once ignoring duplicates
+    // additional loop for newValues to trigger onValueChange after everything is set
+    // also fill array of unique fields
+    const uniqFields: FormField<FV>[] = [];
+
+    for (const [field, prevValue] of prevValuesMap) {
+      if (Object.prototype.hasOwnProperty.call(newValues, field)) continue;
+
+      uniqFields.push(field);
+      this._onValueChange(field, undefined as any, prevValue, onChangeOptions);
     }
 
-    this._rerenderField(field, rerenderOptions);
+    for (const field in newValues) {
+      const newValue = newValues[field];
+      const prevValue = prevValuesMap.get(field);
+
+      uniqFields.push(field);
+      this._onValueChange(field, newValue, prevValue, onChangeOptions);
+    }
+
+    return uniqFields;
   }
 
   /**
-   * Is triggered after multiple fields values change.
-   * Changes their states, triggeres their validation.
-   * Triggeres all fields rerender after all states change and all validation.
-   * In that regard it is different than looping through fields and calling `_onAfterValueChange` for each one.
+   * Parse options, increment changed and validate.
    */
-  protected _onAfterValuesChange(fields: Iterable<FormField<FV>>, options?: O): void {
-    const { byUser, skipChangeUpdate, skipValidation, ...rerenderOptions } = (options || {}) as O;
-
-    if (!skipChangeUpdate) {
-      for (const field of fields) {
-        const fieldState = this._ensureFieldState(field);
-        fieldState.changed++;
-        if (byUser) fieldState.touched++;
+  protected _processValueChange(field: FormField<FV>, options?: O): void {
+    // options most likely will find rare usage
+    // this function might trigger often
+    // more optimized this way
+    if (options) {
+      const { byUser, skipChangeUpdate, skipValidation, ...onChangeOptions } = options;
+      if (!skipChangeUpdate) {
+        this.incrementChanged(field, byUser);
       }
-    }
-
-    if (!skipValidation) {
-      const passedMaybePromise = this._validate(fields, byUser ? 'onTouch' : 'onChange');
-      if (passedMaybePromise instanceof Promise) {
-        passedMaybePromise.then(() => this._rerenderFields(fields, rerenderOptions));
+      if (!skipValidation) {
+        this.validateField(field, byUser ? 'onTouch' : 'onChange', onChangeOptions);
       }
+    } else {
+      this.incrementChanged(field);
+      this.validateField(field, 'onChange');
     }
+  }
 
-    this._rerenderFields(fields, rerenderOptions);
+  /**
+   * Parse options, increment changed and validate.
+   */
+  protected _processValuesChange(fields: Iterable<FormField<FV>>, options?: O): void {
+    for (const field of fields) {
+      this._processValueChange(field, options);
+    }
   }
 
   // region DOM
 
   /**
-   * Simple wrapper around `setValue` with `byUser: true`.
-   * Should be used on `input` event of input field.
-   * Form will set value, trigger `onTouch` validation, etc.
+   * Saves element(s) to internal store and adds event listeners to them.
    *
-   * `InputEvent` object must be provided as second argument.
-   * Value will be taken from it as `event.target.value` or `event.target.checked` for checkbox input.
-   * Generic `{ target: { value: '...' } }` is acceptable.
+   * If element array is passed - field will be associated with all of them.
+   * This is meant primarly for all radio or all checkboxes element groups.
    *
-   * Supposed to be used with `handleBlur`.
+   * Returns unregister function, that removes from internal store and removes event listeners.
    */
-  handleChange(field: FormField<FV>, event: any, options?: O): void {
-    if (!event || typeof event !== 'object') return;
+  registerField(field: FormField<FV>, element: HTMLElement | HTMLElement[]) {
+    this._setFieldElement(field, element);
+    if (this._valuesMap.has(field)) this._setValueToDOM(field, this._valuesMap.get(field));
 
-    const el = event.target;
-    if (!el || typeof el !== 'object') return;
+    // here it is important to pass element without wrapping to array
+    const onInput = () => this._handleInput(field, element);
+    const onBlur = () => this.handleBlur(field);
 
-    const value = el.type === 'checkbox' ? el.checked : el.value;
+    // here wrapping can be done
+    const elements = Array.isArray(element) ? element : [element];
+    for (const el of elements) {
+      el.addEventListener('input', onInput);
+      el.addEventListener('blur', onBlur);
+    }
 
-    this.setValue(field, value, { byUser: true, ...options } as O);
+    return () => {
+      this._elementMap.delete(field);
+      for (const el of elements) {
+        el.removeEventListener('input', onInput);
+        el.removeEventListener('blur', onBlur);
+      }
+    };
+  }
+
+  /**
+   * Multiple `registerField`. Saves element(s) for each field and adds event listeners to them.
+   *
+   * If element array is passed - field will be associated with all of them.
+   * This is meant primarly for all radio or all checkboxes element groups.
+   *
+   * Returns unregister function for each field,
+   * that removes from internal store and removes event listeners.
+   */
+  register<F extends FormField<FV> = FormField<FV>>(
+    elementsMap: Partial<Record<F, HTMLElement | HTMLElement[]>>,
+  ) {
+    const unregisterMap = {} as Partial<Record<F, () => void>>;
+
+    for (const field in elementsMap) {
+      const fieldElement = elementsMap[field as F];
+      if (fieldElement) {
+        unregisterMap[field] = this.registerField(field, fieldElement);
+      }
+    }
+
+    return unregisterMap;
+  }
+
+  /**
+   * Handles user input, should be used on `input` event of input field.
+   *
+   * If `event.target` exists it will be used to extract value.
+   * Otherwise looks up for registered elements for that field and uses them.
+   * If none found does nothing.
+   */
+  handleInput(field: FormField<FV>, event?: any): void {
+    let element = event && typeof event === 'object' && event.target;
+    if (!element || typeof element !== 'object') element = this._getFieldElement(field);
+    if (element) this._handleInput(field, element);
   }
 
   /**
    * Should be used on `blur` event of input field.
-   * Increments `blurred` state and trigger `onBlur` validation.
-   *
-   * Supposed to be used with `handleChange`.
+   * Increments `blurred` state and triggers `onBlur` validation.
    */
-  handleBlur(field: FormField<FV>, options?: O): void {
-    // eslint-disable-next-line
-    const { byUser, skipChangeUpdate, skipValidation, ...rerenderOptions } = (options || {}) as O;
+  handleBlur(field: FormField<FV>): void {
+    this.incrementBlurred(field);
+    this.validateField(field, 'onBlur');
+  }
 
-    const fieldState = this._ensureFieldState(field);
-    if (!skipChangeUpdate) fieldState.blurred++;
-    if (!skipValidation) this.validateField(field, 'onBlur', rerenderOptions);
+  /**
+   * Gets field html element(s) from internal store.
+   * This method might be overriden in subclass.
+   */
+  protected _getFieldElement(field: FormField<FV>) {
+    return this._elementMap.get(field);
+  }
+
+  /**
+   * Sets field html element(s) to internal store.
+   * This method might be overriden in subclass.
+   */
+  protected _setFieldElement(field: FormField<FV>, element: HTMLElement | HTMLElement[]) {
+    this._elementMap.set(field, element);
+  }
+
+  /**
+   * Sets element(s) value(s), triggers onValueChange, upd touched, validate onTouch.
+   */
+  protected _handleInput(field: FormField<FV>, element: HTMLElement | HTMLElement[]): void {
+    const prevValue = this._valuesMap.get(field);
+    const value = Array.isArray(element) ? getElementsValue(element) : getElementValue(element);
+
+    this._valuesMap.set(field, value);
+    this._onValueChange(field, value, prevValue);
+
+    this.incrementChanged(field, true);
+    this.validateField(field, 'onTouch');
+  }
+
+  /**
+   * Sets field value to registered html element(s).
+   */
+  protected _setValueToDOM<F extends FormField<FV> = FormField<FV>>(field: F, value: FV[F]): void {
+    const element = this._getFieldElement(field);
+    if (!element) return;
+    if (Array.isArray(element)) setElementsValue(element, value);
+    else setElementValue(element, value);
   }
 
   // region Validate
@@ -706,66 +904,8 @@ export class FormCtrl<
    */
   validateField(
     field: FormField<FV>,
-    eventName?: FormValidationEventName,
-    rerenderOptions?: RerenderOptions<O>,
-  ): boolean | Promise<boolean> {
-    const passedMaybePromise = this._validateField(field, eventName);
-
-    if (passedMaybePromise instanceof Promise) {
-      return passedMaybePromise.then((passed) => {
-        this._rerenderField(field, rerenderOptions);
-        return passed;
-      });
-    }
-
-    this._rerenderField(field, rerenderOptions);
-    return passedMaybePromise;
-  }
-
-  /**
-   * Triggers multiple fields validation for specific event.
-   *
-   * If `fields` is not provided - trigger validation for all fields that have validation.
-   *
-   * Pass `eventName` to trigger only validation specified for that event, default `'all'`.
-   *
-   * Returns promise only if encounters promisified validate function.
-   *
-   * If any validate function throws an error be it sync or async -
-   * catches error and considers it not passed (as if it returned `false`).
-   *
-   * Triggers all fields rerender after all validation processed.
-   *
-   * If validation results in promise - await it and rerender after.
-   */
-  validate(
-    fields?: Iterable<FormField<FV>>,
-    eventName?: FormValidationEventName,
-    rerenderOptions?: RerenderOptions<O>,
-  ): boolean | Promise<boolean> {
-    const passedMaybePromise = this._validate(fields, eventName);
-
-    if (passedMaybePromise instanceof Promise) {
-      return passedMaybePromise.then((passed) => {
-        this._rerenderFields(fields, rerenderOptions);
-        return passed;
-      });
-    }
-
-    this._rerenderFields(fields, rerenderOptions);
-    return passedMaybePromise;
-  }
-
-  /**
-   * Internal main field validation logic.
-   *
-   * Pass `eventName` to trigger only validation specified for that event, default `'all'`.
-   *
-   * Returns promise only if at least one rule validate function is promisified.
-   */
-  protected _validateField(
-    field: FormField<FV>,
     eventName: FormValidationEventName = 'all',
+    onChangeOptions?: OnChangeOptions<O>,
   ): boolean | Promise<boolean> {
     const fieldValidation = this._validationMap.get(field);
     if (!fieldValidation) return true;
@@ -783,7 +923,7 @@ export class FormCtrl<
         const ruleEventName =
           rule.eventName ||
           fieldValidation.eventName ||
-          this._options.validationEventName ||
+          this.options.validationEventName ||
           FORM_CTRL_DEFAULTS.validationEventName;
 
         if (
@@ -832,7 +972,7 @@ export class FormCtrl<
         } else {
           if (index === 'required') {
             if (internalFieldState.requiredMessage) {
-              delete internalFieldState.requiredMessage;
+              internalFieldState.requiredMessage = null;
               needUpdate = true;
             }
           } else {
@@ -868,12 +1008,12 @@ export class FormCtrl<
       if (typeof required !== 'object') {
         requiredRule.validate =
           fieldValidation.requiredValidate ||
-          this._options.requiredValidate ||
+          this.options.requiredValidate ||
           FORM_CTRL_DEFAULTS.requiredValidate;
         requiredRule.message =
           typeof required === 'string'
             ? required
-            : this._options.requiredMessage || FORM_CTRL_DEFAULTS.requiredMessage;
+            : this.options.requiredMessage || FORM_CTRL_DEFAULTS.requiredMessage;
       }
 
       validateRule(requiredRule, 'required');
@@ -895,7 +1035,7 @@ export class FormCtrl<
     if (promisified) {
       const processBools = needUpdate
         ? (bools: boolean[]) => {
-            this._updateFieldMessages(field);
+            this._updateFieldMessages(field, onChangeOptions);
             return everyTruthy(bools);
           }
         : everyTruthy;
@@ -903,27 +1043,32 @@ export class FormCtrl<
       return Promise.all(results).then(processBools);
     }
 
-    if (needUpdate) this._updateFieldMessages(field);
+    if (needUpdate) this._updateFieldMessages(field, onChangeOptions);
     return everyTruthy(results as boolean[]);
   }
 
   /**
-   * Internal multiple fields validation logic. One or many fields can be provided.
+   * Triggers multiple fields validation for specific event.
+   *
    * If `fields` is not provided - trigger validation for all fields that have validation.
    *
    * Pass `eventName` to trigger only validation specified for that event, default `'all'`.
    *
-   * Returns promise only if at least one rule validate function for at least one field is promisified.
+   * Returns promise only if encounters promisified validate function.
+   *
+   * If any validate function throws an error be it sync or async -
+   * catches error and considers it not passed (as if it returned `false`).
    */
-  protected _validate(
+  validate(
     fields?: Iterable<FormField<FV>>,
     eventName?: FormValidationEventName,
+    onChangeOptions?: OnChangeOptions<O>,
   ): boolean | Promise<boolean> {
     let promisified = false;
     const allResults = [];
 
     for (const field of fields || this._validationMap.keys()) {
-      const passedMaybePromise = this._validateField(field, eventName);
+      const passedMaybePromise = this.validateField(field, eventName, onChangeOptions);
 
       if (passedMaybePromise instanceof Promise) promisified = true;
 
@@ -951,14 +1096,15 @@ export class FormCtrl<
   /**
    * Ensures field validation settings and adds provided rules to it.
    * Previous rules, if there were any, are kept intact.
+   * In contrast to other field validation manipulation methods
+   * this one doesnt cause validation messages drop.
    */
   addFieldValidationRules<F extends FormField<FV> = FormField<FV>>(
     field: F,
     rules: FormFieldValidationRule<FV, F>[],
   ): void {
-    // In this one there are no validation messages drop and no rerender.
-    // It is intentional.
-    // Adding rules to the end of rules array doesnt break previous rules and their messages.
+    // In this one there is no validation messages drop
+    // Adding rules to the end of rules array doesnt break previous rules and their messages
     const fieldValidation = this._ensureFieldValidation(field);
     fieldValidation.rules = fieldValidation.rules || [];
     fieldValidation.rules.push(...rules);
@@ -968,9 +1114,9 @@ export class FormCtrl<
    * Clears field validation settings.
    * Returns `true` if there were settings, `false` otherwise.
    */
-  clearFieldValidation(field: FormField<FV>, rerenderOptions?: RerenderOptions<O>): boolean {
-    const deleted = this._clearFieldValidation(field);
-    this._rerenderField(field, rerenderOptions);
+  clearFieldValidation(field: FormField<FV>, onChangeOptions?: OnChangeOptions<O>): boolean {
+    const deleted = this._validationMap.delete(field);
+    this.clearFieldValidationMessages(field, onChangeOptions);
     return deleted;
   }
 
@@ -983,10 +1129,13 @@ export class FormCtrl<
   setFieldValidation<F extends FormField<FV> = FormField<FV>>(
     field: F,
     partialFieldValidation: Partial<FormFieldValidation<FV, F>>,
-    rerenderOptions?: RerenderOptions<O>,
+    onChangeOptions?: OnChangeOptions<O>,
   ): FormFieldValidation<FV, F> {
-    const fieldValidation = this._setFieldValidation(field, partialFieldValidation);
-    this._rerenderField(field, rerenderOptions);
+    const fieldValidation = Object.assign(
+      this._ensureFieldValidation(field),
+      partialFieldValidation,
+    );
+    this.clearFieldValidationMessages(field, onChangeOptions);
     return fieldValidation;
   }
 
@@ -996,10 +1145,10 @@ export class FormCtrl<
   resetFieldValidation<F extends FormField<FV> = FormField<FV>>(
     field: F,
     fieldValidation: FormFieldValidation<FV, F>,
-    rerenderOptions?: RerenderOptions<O>,
+    onChangeOptions?: OnChangeOptions<O>,
   ): void {
-    this._resetFieldValidation(field, fieldValidation);
-    this._rerenderField(field, rerenderOptions);
+    this._validationMap.set(field, fieldValidation as FormFieldValidation<FV>);
+    this.clearFieldValidationMessages(field, onChangeOptions);
   }
 
   /**
@@ -1013,10 +1162,11 @@ export class FormCtrl<
    * Clears all fields validation settings.
    * Returns fields that had one.
    */
-  clearValidation(rerenderOptions?: RerenderOptions<O>): FormField<FV>[] {
-    const fieldsIterator = this._clearValidation();
-    this._rerenderFields(fieldsIterator, rerenderOptions);
-    return [...fieldsIterator];
+  clearValidation(onChangeOptions?: OnChangeOptions<O>): FormField<FV>[] {
+    const fields = [...this._validationMap.keys()];
+    this._validationMap.clear();
+    this.clearValidationMessages(fields, onChangeOptions);
+    return fields;
   }
 
   /**
@@ -1025,9 +1175,16 @@ export class FormCtrl<
    */
   setValidation(
     someFieldsValidation: Partial<FormValidation<FV>>,
-    rerenderOptions?: RerenderOptions<O>,
+    onChangeOptions?: OnChangeOptions<O>,
   ): void {
-    this._rerenderFields(this._setValidation(someFieldsValidation), rerenderOptions);
+    const fields: FormField<FV>[] = [];
+    for (const field in someFieldsValidation) {
+      const fieldValidation = someFieldsValidation[field as FormField<FV>];
+      if (!fieldValidation) continue;
+      fields.push(field);
+      this._validationMap.set(field, fieldValidation);
+    }
+    this.clearValidationMessages(fields, onChangeOptions);
   }
 
   /**
@@ -1036,18 +1193,21 @@ export class FormCtrl<
    */
   resetValidation(
     allFieldsValidation: FormValidation<FV>,
-    rerenderOptions?: RerenderOptions<O>,
+    onChangeOptions?: OnChangeOptions<O>,
   ): FormField<FV>[] {
-    const clearedFields = this._clearValidation();
-    this._rerenderFields(
-      new Set([...clearedFields, ...this._setValidation(allFieldsValidation)]),
-      rerenderOptions,
-    );
-    return [...clearedFields];
+    const fields = [...this._validationMap.keys()];
+
+    this._validationMap.clear();
+    for (const field in allFieldsValidation) {
+      this._validationMap.set(field, allFieldsValidation[field as FormField<FV>]);
+    }
+
+    this.clearValidationMessages(undefined, onChangeOptions);
+    return fields;
   }
 
   /**
-   * Gets field validation settings. If there is none creates empty ones: `{}`
+   * Gets field validation settings. If there is none creates empty one.
    */
   protected _ensureFieldValidation<F extends FormField<FV> = FormField<FV>>(
     field: F,
@@ -1058,91 +1218,5 @@ export class FormCtrl<
       this._validationMap.set(field, fieldValidation as FormFieldValidation<FV>);
     }
     return fieldValidation;
-  }
-
-  /**
-   * Clears field validation settings.
-   * Returns `true` if there were settings, `false` otherwise.
-   *
-   * Internal without rerender.
-   */
-  protected _clearFieldValidation(field: FormField<FV>): boolean {
-    const result = this._validationMap.delete(field);
-    this._clearFieldValidationMessages(field);
-    return result;
-  }
-
-  /**
-   * Ensures field validation settings and overrides provided params in it.
-   * Rules will be fully overriden.
-   * To add validation rules without full override use `addFieldValidationRules`.
-   * Returns full field validation settings.
-   *
-   * Internal without rerender.
-   */
-  protected _setFieldValidation<F extends FormField<FV> = FormField<FV>>(
-    field: F,
-    partialFieldValidation: Partial<FormFieldValidation<FV, F>>,
-  ): FormFieldValidation<FV, F> {
-    const fieldValidation = Object.assign(
-      this._ensureFieldValidation(field),
-      partialFieldValidation,
-    );
-    this._clearFieldValidationMessages(field);
-    return fieldValidation;
-  }
-
-  /**
-   * Overrides field validation settings with provided ones.
-   *
-   * Internal without rerender.
-   */
-  protected _resetFieldValidation<F extends FormField<FV> = FormField<FV>>(
-    field: F,
-    fieldValidation: FormFieldValidation<FV, F>,
-  ): void {
-    this._validationMap.set(field, fieldValidation as FormFieldValidation<FV>);
-    this._clearFieldValidationMessages(field);
-  }
-
-  /**
-   * Clears all fields validation settings.
-   * Returns fields that had one.
-   *
-   * Internal without rerender.
-   */
-  protected _clearValidation(): FormField<FV>[] {
-    const fieldsWithValidation = [...this._validationMap.keys()];
-    this._validationMap.clear();
-    for (const field of fieldsWithValidation) {
-      this._clearFieldValidationMessages(field);
-    }
-    return fieldsWithValidation;
-  }
-
-  /**
-   * Overrides validation settings for provided fields. Other fields validation settings are kept intact.
-   *
-   * Internal without rerender.
-   */
-  protected _setValidation(someFieldsValidation: Partial<FormValidation<FV>>): FormField<FV>[] {
-    const fields = Object.keys(someFieldsValidation) as FormField<FV>[];
-    for (const field of fields) {
-      if (someFieldsValidation[field]) {
-        this._validationMap.set(field, someFieldsValidation[field]);
-        this._clearFieldValidationMessages(field);
-      }
-    }
-    return fields;
-  }
-
-  /**
-   * Clears all fields validation settings and sets provided ones.
-   * Returns all fields uniq set (dropped, overriden, new).
-   *
-   * Internal without rerender.
-   */
-  protected _resetValidation(allFieldsValidation: FormValidation<FV>): Set<FormField<FV>> {
-    return new Set([...this._clearValidation(), ...this._setValidation(allFieldsValidation)]);
   }
 }
